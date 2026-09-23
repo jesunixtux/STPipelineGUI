@@ -1,0 +1,87 @@
+# STPipelineGUI
+
+# -------------------------------------------------
+# User configuration / credentials
+# -------------------------------------------------
+config/*
+!config/readme.md
+!config/README.md
+
+# Optional local overrides / secrets
+*.local.json
+.env
+.env.*
+secrets.json
+
+# -------------------------------------------------
+# SteamCMD runtime and session data
+# -------------------------------------------------
+steamcmd/SteamCMD/*
+!steamcmd/SteamCMD/readme.md
+!steamcmd/SteamCMD/README.md
+
+steamcmd/config/*
+!steamcmd/config/readme.md
+!steamcmd/config/README.md
+
+# Steam session / runtime files if they appear elsewhere
+config.vdf
+ssfn*
+loginusers.vdf
+
+# -------------------------------------------------
+# Generated app/project cache
+# -------------------------------------------------
+json/apps.json
+json/projects/
+
+# Keep the main manifest tracked
+!json/manifest.json
+
+# -------------------------------------------------
+# Generated SteamPipe files
+# -------------------------------------------------
+vdf/generated/
+*.vdf.tmp
+
+# -------------------------------------------------
+# Build output
+# -------------------------------------------------
+output/*
+
+# Keep the current placeholder structure/documentation tracked
+!output/{idsteamgame}/
+!output/{idsteamgame}/windows/
+!output/{idsteamgame}/windows/readme.md
+!output/{idsteamgame}/linux/
+!output/{idsteamgame}/linux/readme.md
+!output/{idsteamgame}/macos/
+!output/{idsteamgame}/macos/readme.md
+
+# -------------------------------------------------
+# Logs / temporary files
+# -------------------------------------------------
+logs/
+*.log
+*.tmp
+*.temp
+*.bak
+
+# -------------------------------------------------
+# .NET / Visual Studio / Rider
+# -------------------------------------------------
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# -------------------------------------------------
+# OS junk
+# -------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
