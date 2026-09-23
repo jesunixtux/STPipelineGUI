@@ -1,4 +1,6 @@
+using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using STPipelineGUI.Models;
 using STPipelineGUI.Services;
 
@@ -12,9 +14,11 @@ public partial class MainWindow : Window
     private readonly OutputFolderService _outputFolders;
     private readonly VdfGenerator _vdfGenerator;
     private readonly SteamCmdRunner _steamCmdRunner;
+    private readonly List<SteamProject> _visibleProjects = [];
     private ManifestFile _manifest = new();
     private UserConfig _userConfig = new();
     private bool _isBindingProject;
+    private bool _operationInProgress;
 
     public MainWindow()
     {
@@ -23,15 +27,10 @@ public partial class MainWindow : Window
         _vdfGenerator = new VdfGenerator(_paths);
         _steamCmdRunner = new SteamCmdRunner(_paths);
         Loaded += MainWindow_Loaded;
-        RootPathText.Text = _paths.RootPath;
+        FooterClockText.Text = DateTime.Now.ToString("HH:mm");
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
-    {
-        await ReloadAsync();
-    }
-
-    private async void ReloadButton_Click(object sender, RoutedEventArgs e)
     {
         await ReloadAsync();
     }
@@ -42,24 +41,21 @@ public partial class MainWindow : Window
         {
             _manifest = await _manifestService.LoadAsync(_paths.ManifestPath);
             _userConfig = await _userConfigService.LoadAsync(_paths.UserConfigPath);
-            ProjectsList.ItemsSource = _manifest.Projects;
+            AutoScrollCheckBox.IsChecked = _userConfig.AutoScrollLogs;
+            SteamCmdPathTextBox.Text = _userConfig.SteamCmdPath;
+            UsernameTextBox.Text = _userConfig.Username;
 
-            AppendLog($"Manifest cargado: {_paths.ManifestPath}");
-            AppendLog(_manifest.Projects.Count == 1
-                ? "1 proyecto disponible."
-                : $"{_manifest.Projects.Count} proyectos disponibles.");
-
-            if (!System.IO.File.Exists(_paths.UserConfigPath))
-            {
-                AppendLog("config/user.json no existe. Se usaran valores por defecto sin credenciales.");
-            }
-            else
-            {
-                AppendLog("config/user.json cargado. No se leen ni guardan passwords.");
-            }
-
-            ProjectsList.SelectedIndex = _manifest.Projects.Count > 0 ? 0 : -1;
+            ApplyProjectFilter();
+            var remembered = _visibleProjects.FirstOrDefault(p => p.AppId == _userConfig.LastProjectAppId);
+            ProjectsList.SelectedItem = remembered ?? _visibleProjects.FirstOrDefault();
             BindProject(SelectedProject);
+
+            UpdateSteamCmdStatus(File.Exists(_steamCmdRunner.ResolveSteamCmdPath(_userConfig)));
+            SteamworksStatusText.Text = "Pending";
+            AppendLog($"Manifest cargado: {_paths.ManifestPath}");
+            AppendLog(File.Exists(_paths.UserConfigPath)
+                ? "config/user.json cargado. No se leen ni guardan passwords."
+                : "config/user.json no existe. Se usaran valores por defecto sin credenciales.");
         }
         catch (Exception ex)
         {
@@ -69,9 +65,35 @@ public partial class MainWindow : Window
 
     private SteamProject? SelectedProject => ProjectsList.SelectedItem as SteamProject;
 
-    private void ProjectsList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    private void ApplyProjectFilter()
+    {
+        var query = ProjectSearchBox.Text?.Trim() ?? string.Empty;
+        _visibleProjects.Clear();
+        _visibleProjects.AddRange(_manifest.Projects.Where(project =>
+            string.IsNullOrWhiteSpace(query) ||
+            project.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            project.AppId.Contains(query, StringComparison.OrdinalIgnoreCase)));
+
+        ProjectsList.ItemsSource = null;
+        ProjectsList.ItemsSource = _visibleProjects;
+    }
+
+    private void ProjectSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var currentAppId = SelectedProject?.AppId;
+        ApplyProjectFilter();
+        ProjectsList.SelectedItem = _visibleProjects.FirstOrDefault(p => p.AppId == currentAppId) ?? _visibleProjects.FirstOrDefault();
+    }
+
+    private async void ProjectsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         BindProject(SelectedProject);
+
+        if (SelectedProject is { } project && !_isBindingProject)
+        {
+            _userConfig.LastProjectAppId = project.AppId;
+            await SaveUserConfigAsync();
+        }
     }
 
     private void BindProject(SteamProject? project)
@@ -81,31 +103,139 @@ public partial class MainWindow : Window
         if (project is null)
         {
             ProjectNameText.Text = "Sin proyectos";
-            ProjectDescriptionText.Text = "Agrega proyectos a json/manifest.json.";
-            AppIdText.Text = "-";
-            BranchText.Text = "-";
-            ContentRootText.Text = "-";
-            BuildOutputText.Text = "-";
+            ProjectDescriptionText.Text = "Agrega proyectos manualmente en json/manifest.json.";
+            HeaderAppIdText.Text = "AppID: -";
+            HeaderBranchText.Text = "Branch: -";
+            AppIdTextBox.Text = string.Empty;
+            BranchComboBox.Text = "default";
+            BuildCacheTextBox.Text = string.Empty;
+            VdfOutputTextBox.Text = "vdf/generated";
             WindowsCheckBox.IsChecked = false;
             LinuxCheckBox.IsChecked = false;
             MacosCheckBox.IsChecked = false;
-            DepotsGrid.ItemsSource = null;
+            WindowsPathTextBox.Text = string.Empty;
+            LinuxPathTextBox.Text = string.Empty;
+            MacosPathTextBox.Text = string.Empty;
+            VdfPreviewTextBox.Text = string.Empty;
+            PreflightText.Text = "No project selected.";
             _isBindingProject = false;
             return;
         }
 
+        EnsureProjectDefaults(project);
         ProjectNameText.Text = project.Name;
         ProjectDescriptionText.Text = project.Description;
-        AppIdText.Text = project.AppId;
-        BranchText.Text = string.IsNullOrWhiteSpace(project.Branch) ? _userConfig.DefaultBranch : project.Branch;
-        ContentRootText.Text = project.ContentRoot;
-        BuildOutputText.Text = project.BuildOutput;
+        HeaderAppIdText.Text = $"AppID: {project.AppId}";
+        HeaderBranchText.Text = $"Branch: {NormalizeBranch(project.Branch)}";
+        AppIdTextBox.Text = project.AppId;
+        BranchComboBox.Text = NormalizeBranch(project.Branch);
+        BuildCacheTextBox.Text = project.BuildOutput;
+        VdfOutputTextBox.Text = project.VdfOutput;
         WindowsCheckBox.IsChecked = project.Platforms.Windows;
         LinuxCheckBox.IsChecked = project.Platforms.Linux;
         MacosCheckBox.IsChecked = project.Platforms.Macos;
-        DepotsGrid.ItemsSource = project.Depots;
+        WindowsPathTextBox.Text = GetDepot(project, "windows")?.ContentRoot ?? string.Empty;
+        LinuxPathTextBox.Text = GetDepot(project, "linux")?.ContentRoot ?? string.Empty;
+        MacosPathTextBox.Text = GetDepot(project, "macos")?.ContentRoot ?? string.Empty;
+        RefreshVdfPreview();
+        UpdatePreflight(project);
 
         _isBindingProject = false;
+    }
+
+    private void EnsureProjectDefaults(SteamProject project)
+    {
+        if (string.IsNullOrWhiteSpace(project.Branch))
+        {
+            project.Branch = _userConfig.DefaultBranch;
+        }
+
+        if (string.IsNullOrWhiteSpace(project.ContentRoot))
+        {
+            project.ContentRoot = $"output/{project.AppId}";
+        }
+
+        if (string.IsNullOrWhiteSpace(project.BuildOutput))
+        {
+            project.BuildOutput = $"steampipe/cache/{project.AppId}";
+        }
+
+        if (string.IsNullOrWhiteSpace(project.VdfOutput))
+        {
+            project.VdfOutput = "vdf/generated";
+        }
+
+        EnsureDepot(project, "windows");
+        EnsureDepot(project, "linux");
+        EnsureDepot(project, "macos");
+    }
+
+    private static DepotDefinition EnsureDepot(SteamProject project, string platform)
+    {
+        var depot = GetDepot(project, platform);
+        if (depot is not null)
+        {
+            if (string.IsNullOrWhiteSpace(depot.ContentRoot))
+            {
+                depot.ContentRoot = $"output/{project.AppId}/{platform}";
+            }
+
+            return depot;
+        }
+
+        depot = new DepotDefinition
+        {
+            DepotId = string.Empty,
+            Name = platform,
+            Platform = platform,
+            ContentRoot = $"output/{project.AppId}/{platform}"
+        };
+
+        project.Depots.Add(depot);
+        return depot;
+    }
+
+    private static DepotDefinition? GetDepot(SteamProject project, string platform)
+    {
+        return project.Depots.FirstOrDefault(d => d.Platform.Equals(platform, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void ProjectField_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_isBindingProject || SelectedProject is not { } project)
+        {
+            return;
+        }
+
+        project.AppId = AppIdTextBox.Text.Trim();
+        project.BuildOutput = BuildCacheTextBox.Text.Trim();
+        project.VdfOutput = VdfOutputTextBox.Text.Trim();
+        HeaderAppIdText.Text = $"AppID: {project.AppId}";
+        RefreshVdfPreview();
+        UpdatePreflight(project);
+    }
+
+    private void BranchComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateBranchFromUi();
+    }
+
+    private void BranchComboBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        UpdateBranchFromUi();
+    }
+
+    private void UpdateBranchFromUi()
+    {
+        if (_isBindingProject || SelectedProject is not { } project)
+        {
+            return;
+        }
+
+        project.Branch = NormalizeBranch(BranchComboBox.Text);
+        HeaderBranchText.Text = $"Branch: {project.Branch}";
+        RefreshVdfPreview();
+        UpdatePreflight(project);
     }
 
     private void PlatformCheckBox_Changed(object sender, RoutedEventArgs e)
@@ -118,6 +248,126 @@ public partial class MainWindow : Window
         project.Platforms.Windows = WindowsCheckBox.IsChecked == true;
         project.Platforms.Linux = LinuxCheckBox.IsChecked == true;
         project.Platforms.Macos = MacosCheckBox.IsChecked == true;
+        RefreshVdfPreview();
+        UpdatePreflight(project);
+    }
+
+    private void PathTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_isBindingProject || SelectedProject is not { } project)
+        {
+            return;
+        }
+
+        EnsureDepot(project, "windows").ContentRoot = WindowsPathTextBox.Text.Trim();
+        EnsureDepot(project, "linux").ContentRoot = LinuxPathTextBox.Text.Trim();
+        EnsureDepot(project, "macos").ContentRoot = MacosPathTextBox.Text.Trim();
+        RefreshVdfPreview();
+        UpdatePreflight(project);
+    }
+
+    private async void SettingsField_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_isBindingProject)
+        {
+            return;
+        }
+
+        _userConfig.SteamCmdPath = SteamCmdPathTextBox.Text.Trim();
+        _userConfig.Username = UsernameTextBox.Text.Trim();
+        UpdateSteamCmdStatus(File.Exists(_steamCmdRunner.ResolveSteamCmdPath(_userConfig)));
+        await SaveUserConfigAsync();
+    }
+
+    private async void SaveChangesButton_Click(object sender, RoutedEventArgs e)
+    {
+        await SaveAllAsync();
+    }
+
+    private async Task SaveAllAsync()
+    {
+        if (SelectedProject is { } project)
+        {
+            _userConfig.LastProjectAppId = project.AppId;
+        }
+
+        await _manifestService.SaveAsync(_paths.ManifestPath, _manifest);
+        await SaveUserConfigAsync();
+        AppendLog("Cambios guardados.");
+    }
+
+    private async Task SaveUserConfigAsync()
+    {
+        _userConfig.AutoScrollLogs = AutoScrollCheckBox.IsChecked == true;
+        await _userConfigService.SaveAsync(_paths.UserConfigPath, _userConfig);
+    }
+
+    private void RefreshVdfPreview()
+    {
+        if (SelectedProject is not { } project)
+        {
+            return;
+        }
+
+        try
+        {
+            VdfPreviewTextBox.Text = _vdfGenerator.Preview(project);
+        }
+        catch (Exception ex)
+        {
+            VdfPreviewTextBox.Text = $"No se pudo generar preview: {ex.Message}";
+        }
+    }
+
+    private void GenerateVdfButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedProject is not { } project)
+        {
+            AppendLog("Selecciona un proyecto antes de generar VDF.");
+            return;
+        }
+
+        var files = _vdfGenerator.Generate(project);
+        RefreshVdfPreview();
+        AppendLog("VDF generado:");
+        foreach (var file in files)
+        {
+            AppendLog($"  {file}");
+        }
+    }
+
+    private void ValidateBuildButton_Click(object sender, RoutedEventArgs e)
+    {
+        ValidateSelectedBuild(showSuccess: true);
+    }
+
+    private bool ValidateSelectedBuild(bool showSuccess)
+    {
+        if (SelectedProject is not { } project)
+        {
+            AppendLog("Selecciona un proyecto antes de validar.");
+            return false;
+        }
+
+        var errors = _vdfGenerator.Validate(project);
+        if (errors.Count == 0)
+        {
+            PreflightText.Text = "Local validation passed. DepotIDs still need Steamworks verification.";
+            if (showSuccess)
+            {
+                AppendLog("Validacion local OK. Los DepotIDs del manifest no se consideran verificados por Steamworks.");
+            }
+
+            return true;
+        }
+
+        PreflightText.Text = string.Join(Environment.NewLine, errors);
+        foreach (var error in errors)
+        {
+            AppendLog($"Validacion: {error}");
+        }
+
+        return false;
     }
 
     private void CreateFoldersButton_Click(object sender, RoutedEventArgs e)
@@ -140,48 +390,138 @@ public partial class MainWindow : Window
         {
             AppendLog($"  {folder}");
         }
+
+        UpdatePreflight(project);
     }
 
-    private void GenerateVdfButton_Click(object sender, RoutedEventArgs e)
+    private void CheckSteamCmdButton_Click(object sender, RoutedEventArgs e)
     {
-        if (SelectedProject is not { } project)
+        var installed = _steamCmdRunner.CheckInstallation(_userConfig, AppendLog);
+        UpdateSteamCmdStatus(installed);
+    }
+
+    private async void LoginSteamCmdButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_operationInProgress)
         {
-            AppendLog("Selecciona un proyecto antes de generar VDF.");
+            return;
+        }
+
+        await RunOperationAsync("SteamCMD login", () => _steamCmdRunner.LoginAsync(_userConfig, AppendLog));
+    }
+
+    private async void UploadBuildButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_operationInProgress || SelectedProject is not { } project)
+        {
+            return;
+        }
+
+        _outputFolders.EnsureSelectedPlatformFolders(project);
+        var validationOk = ValidateSelectedBuild(showSuccess: false);
+        if (!validationOk)
+        {
+            AppendLog("Upload cancelado: corrige la validacion local primero.");
             return;
         }
 
         var files = _vdfGenerator.Generate(project);
-        AppendLog("VDF generado:");
+        var appBuildPath = _vdfGenerator.GetAppBuildPath(project);
+        var confirmation = BuildUploadConfirmation(project, appBuildPath);
+        var result = MessageBox.Show(
+            confirmation,
+            "Confirmar Upload Build",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+
+        if (result != MessageBoxResult.Yes)
+        {
+            AppendLog("Upload cancelado por el usuario.");
+            return;
+        }
+
+        AppendLog("VDF listo para upload:");
         foreach (var file in files)
         {
             AppendLog($"  {file}");
         }
+
+        await RunOperationAsync("Upload Build", () => _steamCmdRunner.UploadBuildAsync(_userConfig, appBuildPath, AppendLog));
     }
 
-    private async void RunSteamCmdButton_Click(object sender, RoutedEventArgs e)
+    private async Task RunOperationAsync(string label, Func<Task<int>> operation)
     {
-        if (SelectedProject is not { } project)
-        {
-            AppendLog("Selecciona un proyecto antes de preparar SteamCMD.");
-            return;
-        }
-
-        var files = _vdfGenerator.Generate(project);
-        var appBuildFile = files.FirstOrDefault(file => System.IO.Path.GetFileName(file).StartsWith("app_build_", StringComparison.OrdinalIgnoreCase));
-        if (string.IsNullOrWhiteSpace(appBuildFile))
-        {
-            AppendLog("No se pudo generar el app_build VDF.");
-            return;
-        }
-
         try
         {
-            await _steamCmdRunner.RunAppBuildAsync(_userConfig, appBuildFile, AppendLog);
+            _operationInProgress = true;
+            UploadBuildButton.IsEnabled = false;
+            FooterStatusText.Text = $"{label} en progreso...";
+            var exitCode = await operation();
+            FooterStatusText.Text = exitCode == 0 ? $"{label} finalizado." : $"{label} finalizo con codigo {exitCode}.";
         }
         catch (Exception ex)
         {
-            AppendLog($"SteamCMD no pudo ejecutarse: {ex.Message}");
+            AppendLog($"{label} fallo: {ex.Message}");
+            FooterStatusText.Text = $"{label} fallo.";
         }
+        finally
+        {
+            _operationInProgress = false;
+            UploadBuildButton.IsEnabled = true;
+        }
+    }
+
+    private string BuildUploadConfirmation(SteamProject project, string appBuildPath)
+    {
+        var selectedDepots = project.Depots
+            .Where(d => project.Platforms.SelectedPlatforms().Contains(d.Platform, StringComparer.OrdinalIgnoreCase))
+            .Select(d => $"{d.Platform}: DepotID {d.DepotId}, path {_paths.Resolve(d.ContentRoot)}");
+
+        return "Estas a punto de ejecutar SteamCMD run_app_build.\n\n" +
+               $"Proyecto: {project.Name}\n" +
+               $"AppID: {project.AppId}\n" +
+               $"Rama destino: {NormalizeBranch(project.Branch)}\n" +
+               $"App build VDF: {appBuildPath}\n\n" +
+               "Plataformas y depots:\n" +
+               string.Join(Environment.NewLine, selectedDepots) +
+               "\n\nNo se hara SetLive para la rama default. No continues si estos DepotIDs no fueron verificados en Steamworks.";
+    }
+
+    private async void AutoScrollCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_isBindingProject)
+        {
+            return;
+        }
+
+        await SaveUserConfigAsync();
+    }
+
+    private void ClearLogsButton_Click(object sender, RoutedEventArgs e)
+    {
+        LogsTextBox.Clear();
+    }
+
+    private void UpdatePreflight(SteamProject project)
+    {
+        var errors = _vdfGenerator.Validate(project);
+        PreflightText.Text = errors.Count == 0
+            ? "Ready locally. DepotIDs are not Steamworks-verified."
+            : string.Join(Environment.NewLine, errors.Take(4));
+    }
+
+    private void UpdateSteamCmdStatus(bool installed)
+    {
+        SteamCmdStatusText.Text = installed ? "Installed" : "Missing";
+        SteamCmdStatusText.Foreground = installed
+            ? (System.Windows.Media.Brush)FindResource("AccentGreen")
+            : (System.Windows.Media.Brush)FindResource("DangerRed");
+    }
+
+    private static string NormalizeBranch(string? branch)
+    {
+        return string.IsNullOrWhiteSpace(branch) ? "default" : branch.Trim();
     }
 
     private void AppendLog(string message)
@@ -189,7 +529,10 @@ public partial class MainWindow : Window
         Dispatcher.Invoke(() =>
         {
             LogsTextBox.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}");
-            LogsTextBox.ScrollToEnd();
+            if (AutoScrollCheckBox.IsChecked == true)
+            {
+                LogsTextBox.ScrollToEnd();
+            }
         });
     }
 }

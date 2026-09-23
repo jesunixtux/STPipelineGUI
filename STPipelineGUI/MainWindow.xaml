@@ -4,111 +4,363 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="STPipelineGUI" Height="720" Width="1120"
-        MinHeight="620" MinWidth="960"
-        Background="#F4F6F8">
-    <Grid Margin="16">
+        Title="STPipelineGUI" Height="860" Width="1320"
+        MinHeight="720" MinWidth="1120"
+        Background="#0B1118">
+    <Window.Resources>
+        <SolidColorBrush x:Key="PageBackground" Color="#0B1118" />
+        <SolidColorBrush x:Key="PanelBackground" Color="#101923" />
+        <SolidColorBrush x:Key="CardBackground" Color="#121D28" />
+        <SolidColorBrush x:Key="CardBackgroundAlt" Color="#0D1721" />
+        <SolidColorBrush x:Key="BorderBrushSoft" Color="#243447" />
+        <SolidColorBrush x:Key="TextPrimary" Color="#E7EEF8" />
+        <SolidColorBrush x:Key="TextMuted" Color="#9FB0C4" />
+        <SolidColorBrush x:Key="AccentBlue" Color="#1E9BFF" />
+        <SolidColorBrush x:Key="AccentGreen" Color="#50D890" />
+        <SolidColorBrush x:Key="DangerRed" Color="#FF6B6B" />
+
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+        </Style>
+
+        <Style TargetType="Border" x:Key="Card">
+            <Setter Property="Background" Value="{StaticResource CardBackground}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushSoft}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="7" />
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#0B141E" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="BorderBrush" Value="#33475D" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="CaretBrush" Value="{StaticResource TextPrimary}" />
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="#0B141E" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="BorderBrush" Value="#33475D" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="Margin" Value="0,0,18,0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="Background" Value="#172637" />
+            <Setter Property="BorderBrush" Value="#33475D" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+
+        <Style TargetType="Button" x:Key="PrimaryButton" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource AccentBlue}" />
+            <Setter Property="BorderBrush" Value="#5BB8FF" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="18,12" />
+        </Style>
+
+        <Style TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+            <Setter Property="Background" Value="#101923" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushSoft}" />
+            <Setter Property="Padding" Value="24,12" />
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="{StaticResource PageBackground}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="66" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="180" />
+            <RowDefinition Height="28" />
         </Grid.RowDefinitions>
 
-        <DockPanel Grid.Row="0" Margin="0,0,0,12">
-            <StackPanel DockPanel.Dock="Left">
-                <TextBlock Text="STPipelineGUI" FontSize="26" FontWeight="SemiBold" Foreground="#17202A" />
-                <TextBlock x:Name="RootPathText" Foreground="#53616F" Margin="0,4,0,0" />
-            </StackPanel>
-            <Button DockPanel.Dock="Right" Content="Recargar" Width="110" Height="34" Click="ReloadButton_Click" />
-        </DockPanel>
+        <Border Grid.Row="0" Background="#0E1721" BorderBrush="#213044" BorderThickness="0,0,0,1">
+            <Grid Margin="22,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="40" Height="40" Background="#1A2B3D" CornerRadius="20" Margin="0,0,12,0">
+                        <TextBlock Text="S" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="22" FontWeight="Bold" Foreground="#B8C7D9" />
+                    </Border>
+                    <StackPanel>
+                        <TextBlock Text="STPipelineGUI" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="Steam Build Pipeline for Indie Developers" Foreground="{StaticResource TextMuted}" FontSize="13" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Style="{StaticResource Card}" Padding="12,7" Margin="0,0,10,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="9" Height="9" Fill="{StaticResource AccentGreen}" Margin="0,0,8,0" />
+                            <TextBlock Text="SteamCMD:" Foreground="{StaticResource TextMuted}" Margin="0,0,5,0" />
+                            <TextBlock x:Name="SteamCmdStatusText" Text="Not checked" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}" Padding="12,7">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="9" Height="9" Fill="#6B7788" Margin="0,0,8,0" />
+                            <TextBlock Text="Steamworks API:" Foreground="{StaticResource TextMuted}" Margin="0,0,5,0" />
+                            <TextBlock x:Name="SteamworksStatusText" Text="Not configured" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="280" />
-                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="300" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Background="White" BorderBrush="#D9E1E8" BorderThickness="1" CornerRadius="6">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="Proyectos" FontSize="16" FontWeight="SemiBold" Margin="14,12,14,8" />
-                    <ListBox x:Name="ProjectsList" Margin="8,0,8,8" DisplayMemberPath="Name" SelectionChanged="ProjectsList_SelectionChanged" />
+            <Border Grid.Column="0" Background="#0D1620" BorderBrush="#213044" BorderThickness="0,0,1,0" Padding="16">
+                <DockPanel LastChildFill="True">
+                    <StackPanel DockPanel.Dock="Top">
+                        <Grid Margin="0,6,0,14">
+                            <TextBlock Text="Projects" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Button Content="+" Width="36" Height="32" HorizontalAlignment="Right" ToolTip="Future manual project creation" />
+                        </Grid>
+                        <TextBox x:Name="ProjectSearchBox" TextChanged="ProjectSearchBox_TextChanged" Margin="0,0,0,14" />
+                    </StackPanel>
+
+                    <StackPanel DockPanel.Dock="Bottom">
+                        <Border Style="{StaticResource Card}" Padding="14" Margin="0,12,0,12">
+                            <StackPanel>
+                                <TextBlock Text="Build. Upload. Play." FontWeight="SemiBold" />
+                                <TextBlock Text="Get your game to Steam, faster." Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="STPipelineGUI v0.2" Foreground="{StaticResource TextMuted}" FontSize="12" />
+                    </StackPanel>
+
+                    <ListBox x:Name="ProjectsList"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             SelectionChanged="ProjectsList_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="10" Margin="0,3" Background="#132234" CornerRadius="6">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding AppId, StringFormat=AppID: {0}}" Foreground="{StaticResource TextMuted}" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </DockPanel>
             </Border>
 
-            <Border Grid.Column="2" Background="White" BorderBrush="#D9E1E8" BorderThickness="1" CornerRadius="6" Padding="18">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <StackPanel Grid.Row="0">
-                        <TextBlock x:Name="ProjectNameText" Text="Selecciona un proyecto" FontSize="24" FontWeight="SemiBold" Foreground="#17202A" />
-                        <TextBlock x:Name="ProjectDescriptionText" Foreground="#53616F" Margin="0,6,0,0" TextWrapping="Wrap" />
-                    </StackPanel>
-
-                    <UniformGrid Grid.Row="1" Columns="4" Margin="0,18,0,18">
-                        <StackPanel>
-                            <TextBlock Text="AppID" Foreground="#53616F" />
-                            <TextBlock x:Name="AppIdText" FontSize="16" FontWeight="SemiBold" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Branch" Foreground="#53616F" />
-                            <TextBlock x:Name="BranchText" FontSize="16" FontWeight="SemiBold" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Content root" Foreground="#53616F" />
-                            <TextBlock x:Name="ContentRootText" FontSize="14" TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="VDF output" Foreground="#53616F" />
-                            <TextBlock x:Name="BuildOutputText" FontSize="14" TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                    </UniformGrid>
-
-                    <Grid Grid.Row="2">
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="18">
+                    <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="150" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="260" />
                         </Grid.ColumnDefinitions>
 
-                        <GroupBox Header="Plataformas" Padding="12" Margin="0,0,12,0">
-                            <StackPanel>
-                                <CheckBox x:Name="WindowsCheckBox" Content="Windows" Margin="0,0,0,10" Checked="PlatformCheckBox_Changed" Unchecked="PlatformCheckBox_Changed" />
-                                <CheckBox x:Name="LinuxCheckBox" Content="Linux" Margin="0,0,0,10" Checked="PlatformCheckBox_Changed" Unchecked="PlatformCheckBox_Changed" />
-                                <CheckBox x:Name="MacosCheckBox" Content="macOS" Checked="PlatformCheckBox_Changed" Unchecked="PlatformCheckBox_Changed" />
-                            </StackPanel>
-                        </GroupBox>
+                        <Border Style="{StaticResource Card}" Height="92" Margin="0,0,18,0" Background="#18304B">
+                            <TextBlock Text="BUILD" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold" FontSize="24" Foreground="#7BC7FF" />
+                        </Border>
 
-                        <GroupBox Grid.Column="1" Header="Depots" Padding="12">
-                            <DataGrid x:Name="DepotsGrid" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" HeadersVisibility="Column">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="DepotID" Binding="{Binding DepotId}" Width="110" />
-                                    <DataGridTextColumn Header="Nombre" Binding="{Binding Name}" Width="160" />
-                                    <DataGridTextColumn Header="Plataforma" Binding="{Binding Platform}" Width="120" />
-                                    <DataGridTextColumn Header="Ruta" Binding="{Binding ContentRoot}" Width="*" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </GroupBox>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="ProjectNameText" Text="Selecciona un proyecto" FontSize="28" FontWeight="SemiBold" />
+                                <Button Content="Guardar cambios" Margin="16,0,0,0" Click="SaveChangesButton_Click" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <TextBlock x:Name="HeaderAppIdText" Foreground="{StaticResource TextMuted}" Margin="0,0,20,0" />
+                                <TextBlock x:Name="HeaderBranchText" Foreground="{StaticResource TextMuted}" Margin="0,0,20,0" />
+                                <TextBlock Text="Steamworks sync: pending integration" Foreground="{StaticResource TextMuted}" />
+                            </StackPanel>
+                            <TextBlock x:Name="ProjectDescriptionText" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Column="2" Text="Manual projects now. Steamworks sync later." Foreground="{StaticResource TextMuted}" FontStyle="Italic" TextWrapping="Wrap" TextAlignment="Right" VerticalAlignment="Center" />
                     </Grid>
 
-                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-                        <Button Content="Crear carpetas" Width="130" Height="36" Margin="0,0,10,0" Click="CreateFoldersButton_Click" />
-                        <Button Content="Generar VDF" Width="120" Height="36" Margin="0,0,10,0" Click="GenerateVdfButton_Click" />
-                        <Button Content="Probar SteamCMD" Width="140" Height="36" Click="RunSteamCmdButton_Click" />
-                    </StackPanel>
-                </Grid>
-            </Border>
+                    <TabControl x:Name="MainTabs">
+                        <TabItem Header="Build &amp; Upload">
+                            <StackPanel Margin="0,14,0,0">
+                                <Border Style="{StaticResource Card}" Padding="20">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="18" />
+                                            <ColumnDefinition Width="1*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Grid Grid.Row="0" Grid.Column="0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="16" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="AppID" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                                <TextBox x:Name="AppIdTextBox" TextChanged="ProjectField_TextChanged" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Branch" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                                <ComboBox x:Name="BranchComboBox" IsEditable="True" SelectionChanged="BranchComboBox_SelectionChanged" LostFocus="BranchComboBox_LostFocus">
+                                                    <ComboBoxItem Content="default" />
+                                                    <ComboBoxItem Content="public" />
+                                                    <ComboBoxItem Content="beta" />
+                                                </ComboBox>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <StackPanel Grid.Row="0" Grid.Column="2">
+                                            <TextBlock Text="Platforms" FontWeight="SemiBold" Margin="0,0,0,12" />
+                                            <StackPanel Orientation="Horizontal">
+                                                <CheckBox x:Name="WindowsCheckBox" Content="Windows" Checked="PlatformCheckBox_Changed" Unchecked="PlatformCheckBox_Changed" />
+                                                <CheckBox x:Name="LinuxCheckBox" Content="Linux" Checked="PlatformCheckBox_Changed" Unchecked="PlatformCheckBox_Changed" />
+                                                <CheckBox x:Name="MacosCheckBox" Content="macOS" Checked="PlatformCheckBox_Changed" Unchecked="PlatformCheckBox_Changed" />
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,22,0,0">
+                                            <TextBlock Text="Build Content" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12" />
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="16" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="16" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="Output Folder (Windows)" Foreground="{StaticResource TextMuted}" Margin="0,0,0,8" />
+                                                    <TextBox x:Name="WindowsPathTextBox" TextChanged="PathTextBox_TextChanged" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2">
+                                                    <TextBlock Text="Output Folder (Linux)" Foreground="{StaticResource TextMuted}" Margin="0,0,0,8" />
+                                                    <TextBox x:Name="LinuxPathTextBox" TextChanged="PathTextBox_TextChanged" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="4">
+                                                    <TextBlock Text="Output Folder (macOS)" Foreground="{StaticResource TextMuted}" Margin="0,0,0,8" />
+                                                    <TextBox x:Name="MacosPathTextBox" TextChanged="PathTextBox_TextChanged" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+
+                                        <Grid Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,22,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="18" />
+                                                <ColumnDefinition Width="300" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel>
+                                                <DockPanel Margin="0,0,0,8">
+                                                    <TextBlock Text="Generated VDF Preview" FontSize="16" FontWeight="SemiBold" />
+                                                    <Button DockPanel.Dock="Right" Content="Regenerate" Click="GenerateVdfButton_Click" />
+                                                </DockPanel>
+                                                <TextBox x:Name="VdfPreviewTextBox" Height="210" FontFamily="Consolas" FontSize="13" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" IsReadOnly="True" />
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="2">
+                                                <Button x:Name="UploadBuildButton" Style="{StaticResource PrimaryButton}" Content="Upload Build" Height="62" Click="UploadBuildButton_Click" />
+                                                <Border Style="{StaticResource Card}" Padding="14" Margin="0,12,0,0" Background="{StaticResource CardBackgroundAlt}">
+                                                    <StackPanel>
+                                                        <TextBlock Text="Pre-flight" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                                        <TextBlock x:Name="PreflightText" Text="Run validation before upload." Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                </Border>
+                                                <Button Content="Comprobar SteamCMD" Margin="0,12,0,0" Click="CheckSteamCmdButton_Click" />
+                                                <Button Content="Iniciar sesion SteamCMD" Margin="0,8,0,0" Click="LoginSteamCmdButton_Click" />
+                                                <Button Content="Crear carpetas" Margin="0,8,0,0" Click="CreateFoldersButton_Click" />
+                                                <Button Content="Validar build" Margin="0,8,0,0" Click="ValidateBuildButton_Click" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource Card}" Padding="14" Margin="0,14,0,0">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+                                            <TextBlock Text="SteamCMD Console" FontSize="16" FontWeight="SemiBold" />
+                                            <Button Content="Clear" Margin="18,0,0,0" Click="ClearLogsButton_Click" />
+                                            <CheckBox x:Name="AutoScrollCheckBox" Content="Auto-scroll" Margin="18,0,0,0" Checked="AutoScrollCheckBox_Changed" Unchecked="AutoScrollCheckBox_Changed" />
+                                        </StackPanel>
+                                        <TextBox x:Name="LogsTextBox" Height="180" Background="#071019" BorderBrush="#26384A" Foreground="#CFE3F7" FontFamily="Consolas" FontSize="13" IsReadOnly="True" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" />
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+                        </TabItem>
+
+                        <TabItem Header="Settings">
+                            <Border Style="{StaticResource Card}" Padding="20" Margin="0,14,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Text="SteamCMD Path" Grid.Row="0" Foreground="{StaticResource TextMuted}" Margin="0,8,18,0" />
+                                    <TextBox x:Name="SteamCmdPathTextBox" Grid.Row="0" Grid.Column="1" TextChanged="SettingsField_TextChanged" />
+
+                                    <TextBlock Text="Username" Grid.Row="1" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
+                                    <TextBox x:Name="UsernameTextBox" Grid.Row="1" Grid.Column="1" Margin="0,10,0,0" TextChanged="SettingsField_TextChanged" />
+
+                                    <TextBlock Text="SteamPipe cache" Grid.Row="2" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
+                                    <TextBox x:Name="BuildCacheTextBox" Grid.Row="2" Grid.Column="1" Margin="0,10,0,0" TextChanged="ProjectField_TextChanged" />
+
+                                    <TextBlock Text="VDF output folder" Grid.Row="3" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
+                                    <TextBox x:Name="VdfOutputTextBox" Grid.Row="3" Grid.Column="1" Margin="0,10,0,0" TextChanged="ProjectField_TextChanged" />
+                                </Grid>
+                            </Border>
+                        </TabItem>
+
+                        <TabItem Header="History">
+                            <Border Style="{StaticResource Card}" Padding="20" Margin="0,14,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="History" FontSize="18" FontWeight="SemiBold" />
+                                    <TextBlock Text="No local build history is recorded yet. This tab is prepared for a later phase and does not claim synced Steamworks data." Foreground="{StaticResource TextMuted}" Margin="0,8,0,0" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </TabItem>
+                    </TabControl>
+                </StackPanel>
+            </ScrollViewer>
         </Grid>
 
-        <Border Grid.Row="2" Background="#111820" BorderBrush="#25313D" BorderThickness="1" CornerRadius="6" Margin="0,12,0,0">
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="Logs" Foreground="#EAF0F6" FontWeight="SemiBold" Margin="12,10,12,0" />
-                <TextBox x:Name="LogsTextBox" Margin="12,8,12,12" Background="#111820" BorderThickness="0" Foreground="#D6E1EA" FontFamily="Consolas" FontSize="13" IsReadOnly="True" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" />
-            </DockPanel>
+        <Border Grid.Row="2" Background="#0E1721" BorderBrush="#213044" BorderThickness="0,1,0,0">
+            <Grid Margin="18,0">
+                <TextBlock x:Name="FooterStatusText" Text="Ready." Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" />
+                <TextBlock x:Name="FooterClockText" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
         </Border>
     </Grid>
 </Window>

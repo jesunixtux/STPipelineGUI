@@ -7,7 +7,8 @@ public sealed class SteamProject
     public string Branch { get; set; } = "default";
     public string Description { get; set; } = string.Empty;
     public string ContentRoot { get; set; } = string.Empty;
-    public string BuildOutput { get; set; } = "vdf/generated";
+    public string BuildOutput { get; set; } = string.Empty;
+    public string VdfOutput { get; set; } = "vdf/generated";
     public PlatformSelection Platforms { get; set; } = new();
     public List<DepotDefinition> Depots { get; set; } = [];
 

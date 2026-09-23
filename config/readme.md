@@ -7,7 +7,9 @@ Archivo local opcional esperado por la app:
 {
   "steamCmdPath": "steamcmd/SteamCMD/steamcmd.exe",
   "username": "",
-  "defaultBranch": "default"
+  "defaultBranch": "default",
+  "lastProjectAppId": "",
+  "autoScrollLogs": true
 }
 ```
 

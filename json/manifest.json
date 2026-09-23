@@ -6,7 +6,8 @@
       "branch": "default",
       "description": "Proyecto de ejemplo para validar el pipeline local.",
       "contentRoot": "output/4053230",
-      "buildOutput": "vdf/generated",
+      "buildOutput": "steampipe/cache/4053230",
+      "vdfOutput": "vdf/generated",
       "platforms": {
         "windows": true,
         "linux": false,

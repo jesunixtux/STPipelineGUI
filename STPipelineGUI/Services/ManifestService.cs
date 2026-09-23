@@ -27,4 +27,16 @@ public sealed class ManifestService
 
         return JsonSerializer.Deserialize<ManifestFile>(json, JsonOptions) ?? new ManifestFile();
     }
+
+    public async Task SaveAsync(string path, ManifestFile manifest)
+    {
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var json = JsonSerializer.Serialize(manifest, JsonOptions);
+        await File.WriteAllTextAsync(path, json);
+    }
 }

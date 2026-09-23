@@ -20,7 +20,8 @@ public sealed class OutputFolderService
 
         foreach (var platform in project.Platforms.SelectedPlatforms())
         {
-            var platformPath = Path.Combine(appRoot, platform);
+            var depotPath = project.Depots.FirstOrDefault(d => d.Platform.Equals(platform, StringComparison.OrdinalIgnoreCase))?.ContentRoot;
+            var platformPath = string.IsNullOrWhiteSpace(depotPath) ? Path.Combine(appRoot, platform) : _paths.Resolve(depotPath);
             Directory.CreateDirectory(platformPath);
             created.Add(platformPath);
         }

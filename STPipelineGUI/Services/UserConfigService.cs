@@ -27,4 +27,16 @@ public sealed class UserConfigService
 
         return JsonSerializer.Deserialize<UserConfig>(json, JsonOptions) ?? new UserConfig();
     }
+
+    public async Task SaveAsync(string path, UserConfig config)
+    {
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var json = JsonSerializer.Serialize(config, JsonOptions);
+        await File.WriteAllTextAsync(path, json);
+    }
 }

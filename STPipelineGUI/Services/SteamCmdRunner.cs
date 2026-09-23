@@ -13,17 +13,57 @@ public sealed class SteamCmdRunner
         _paths = paths;
     }
 
-    public async Task<int> RunAppBuildAsync(
+    public string ResolveSteamCmdPath(UserConfig config) => _paths.Resolve(config.SteamCmdPath);
+
+    public bool CheckInstallation(UserConfig config, Action<string> onOutput)
+    {
+        var steamCmdPath = ResolveSteamCmdPath(config);
+        if (File.Exists(steamCmdPath))
+        {
+            onOutput($"SteamCMD encontrado: {steamCmdPath}");
+            return true;
+        }
+
+        onOutput($"SteamCMD no encontrado en: {steamCmdPath}");
+        onOutput("Instala steamcmd.exe o ajusta config/user.json. Esta comprobacion no ejecuta uploads.");
+        return false;
+    }
+
+    public Task<int> LoginAsync(
+        UserConfig config,
+        Action<string> onOutput,
+        CancellationToken cancellationToken = default)
+    {
+        var username = string.IsNullOrWhiteSpace(config.Username) ? "anonymous" : config.Username;
+        return RunSteamCmdAsync(config, onOutput, cancellationToken, "+login", username, "+quit");
+    }
+
+    public async Task<int> UploadBuildAsync(
         UserConfig config,
         string appBuildVdfPath,
         Action<string> onOutput,
         CancellationToken cancellationToken = default)
     {
-        var steamCmdPath = _paths.Resolve(config.SteamCmdPath);
+        if (!File.Exists(appBuildVdfPath))
+        {
+            onOutput($"No existe el app_build VDF: {appBuildVdfPath}");
+            return -1;
+        }
+
+        var username = string.IsNullOrWhiteSpace(config.Username) ? "anonymous" : config.Username;
+        return await RunSteamCmdAsync(config, onOutput, cancellationToken, "+login", username, "+run_app_build", appBuildVdfPath, "+quit");
+    }
+
+    private async Task<int> RunSteamCmdAsync(
+        UserConfig config,
+        Action<string> onOutput,
+        CancellationToken cancellationToken,
+        params string[] arguments)
+    {
+        var steamCmdPath = ResolveSteamCmdPath(config);
         if (!File.Exists(steamCmdPath))
         {
             onOutput($"SteamCMD no encontrado en: {steamCmdPath}");
-            onOutput("Instala steamcmd.exe o ajusta config/user.json cuando quieras ejecutar builds reales.");
             return -1;
         }
 
@@ -37,11 +77,10 @@ public sealed class SteamCmdRunner
             CreateNoWindow = true
         };
 
-        startInfo.ArgumentList.Add("+login");
-        startInfo.ArgumentList.Add(string.IsNullOrWhiteSpace(config.Username) ? "anonymous" : config.Username);
-        startInfo.ArgumentList.Add("+run_app_build");
-        startInfo.ArgumentList.Add(appBuildVdfPath);
-        startInfo.ArgumentList.Add("+quit");
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
 
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, args) => AppendLine(args.Data, onOutput);
@@ -59,9 +98,18 @@ public sealed class SteamCmdRunner
 
     private static void AppendLine(string? line, Action<string> onOutput)
     {
-        if (!string.IsNullOrWhiteSpace(line))
+        if (string.IsNullOrWhiteSpace(line))
         {
-            onOutput(line);
+            return;
+        }
+
+        onOutput(line);
+
+        if (line.Contains("Steam Guard", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("two-factor", StringComparison.OrdinalIgnoreCase) ||
+            line.Contains("2FA", StringComparison.OrdinalIgnoreCase))
+        {
+            onOutput("Steam Guard requiere una nueva autenticacion. Completa el login fuera de la app o agrega el flujo 2FA en una fase posterior.");
         }
     }
 }
