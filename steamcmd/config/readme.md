@@ -1,0 +1,1 @@
+Acá deberia estar los archivos de configuracin que va usar steamcmd
