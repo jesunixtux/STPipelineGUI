@@ -7,4 +7,5 @@ public sealed class UserConfig
     public string DefaultBranch { get; set; } = "default";
     public string LastProjectAppId { get; set; } = string.Empty;
     public bool AutoScrollLogs { get; set; } = true;
+    public SteamworksConfig Steamworks { get; set; } = new();
 }

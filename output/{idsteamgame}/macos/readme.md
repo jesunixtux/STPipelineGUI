@@ -1,1 +1,0 @@
-Se copia la version del juego 

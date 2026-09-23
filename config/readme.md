@@ -9,8 +9,13 @@ Archivo local opcional esperado por la app:
   "username": "",
   "defaultBranch": "default",
   "lastProjectAppId": "",
-  "autoScrollLogs": true
+  "autoScrollLogs": true,
+  "steamworks": {
+    "enabled": true,
+    "publisherApiKey": "TU_PUBLISHER_KEY",
+    "partnerApiBaseUrl": "https://partner.steam-api.com"
+  }
 }
 ```
 
-`config/user.json` queda ignorado por Git. No guardar passwords ni API keys en el codigo.
+`config/user.json` queda ignorado por Git. La key se muestra enmascarada en la GUI, se envía solo por HTTPS y nunca se escribe en los logs. Steamworks debe tener el AppID asociado al grupo de la Publisher Web API key.

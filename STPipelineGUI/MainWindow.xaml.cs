@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using STPipelineGUI.Models;
 using STPipelineGUI.Services;
 
@@ -14,10 +15,12 @@ public partial class MainWindow : Window
     private readonly OutputFolderService _outputFolders;
     private readonly VdfGenerator _vdfGenerator;
     private readonly SteamCmdRunner _steamCmdRunner;
+    private readonly SteamworksApiClient _steamworksApiClient = new();
     private readonly List<SteamProject> _visibleProjects = [];
     private ManifestFile _manifest = new();
     private UserConfig _userConfig = new();
     private bool _isBindingProject;
+    private bool _isLoadingConfig;
     private bool _operationInProgress;
 
     public MainWindow()
@@ -41,9 +44,20 @@ public partial class MainWindow : Window
         {
             _manifest = await _manifestService.LoadAsync(_paths.ManifestPath);
             _userConfig = await _userConfigService.LoadAsync(_paths.UserConfigPath);
-            AutoScrollCheckBox.IsChecked = _userConfig.AutoScrollLogs;
-            SteamCmdPathTextBox.Text = _userConfig.SteamCmdPath;
-            UsernameTextBox.Text = _userConfig.Username;
+            _userConfig.Steamworks ??= new SteamworksConfig();
+            _isLoadingConfig = true;
+            try
+            {
+                AutoScrollCheckBox.IsChecked = _userConfig.AutoScrollLogs;
+                SteamCmdPathTextBox.Text = _userConfig.SteamCmdPath;
+                UsernameTextBox.Text = _userConfig.Username;
+                SteamworksApiBaseUrlTextBox.Text = _userConfig.Steamworks.PartnerApiBaseUrl;
+                SteamworksApiKeyPasswordBox.Password = _userConfig.Steamworks.PublisherApiKey;
+            }
+            finally
+            {
+                _isLoadingConfig = false;
+            }
 
             ApplyProjectFilter();
             var remembered = _visibleProjects.FirstOrDefault(p => p.AppId == _userConfig.LastProjectAppId);
@@ -51,7 +65,7 @@ public partial class MainWindow : Window
             BindProject(SelectedProject);
 
             UpdateSteamCmdStatus(File.Exists(_steamCmdRunner.ResolveSteamCmdPath(_userConfig)));
-            SteamworksStatusText.Text = "Pending";
+            UpdateSteamworksStatusFromConfig();
             AppendLog($"Manifest cargado: {_paths.ManifestPath}");
             AppendLog(File.Exists(_paths.UserConfigPath)
                 ? "config/user.json cargado. No se leen ni guardan passwords."
@@ -268,24 +282,40 @@ public partial class MainWindow : Window
 
     private async void SettingsField_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (_isBindingProject)
+        if (_isBindingProject || _isLoadingConfig)
         {
             return;
         }
 
         _userConfig.SteamCmdPath = SteamCmdPathTextBox.Text.Trim();
         _userConfig.Username = UsernameTextBox.Text.Trim();
+        _userConfig.Steamworks.PartnerApiBaseUrl = SteamworksApiBaseUrlTextBox.Text.Trim();
         UpdateSteamCmdStatus(File.Exists(_steamCmdRunner.ResolveSteamCmdPath(_userConfig)));
+        UpdateSteamworksStatusFromConfig();
         await SaveUserConfigAsync();
+    }
+
+    private void SteamworksApiKeyPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isLoadingConfig)
+        {
+            return;
+        }
+
+        _userConfig.Steamworks.PublisherApiKey = SteamworksApiKeyPasswordBox.Password;
+        UpdateSteamworksStatusFromConfig();
     }
 
     private async void SaveChangesButton_Click(object sender, RoutedEventArgs e)
     {
+        CaptureSteamworksSettings();
         await SaveAllAsync();
     }
 
     private async Task SaveAllAsync()
     {
+        CaptureSteamworksSettings();
+
         if (SelectedProject is { } project)
         {
             _userConfig.LastProjectAppId = project.AppId;
@@ -298,8 +328,16 @@ public partial class MainWindow : Window
 
     private async Task SaveUserConfigAsync()
     {
+        CaptureSteamworksSettings();
         _userConfig.AutoScrollLogs = AutoScrollCheckBox.IsChecked == true;
         await _userConfigService.SaveAsync(_paths.UserConfigPath, _userConfig);
+    }
+
+    private void CaptureSteamworksSettings()
+    {
+        _userConfig.Steamworks ??= new SteamworksConfig();
+        _userConfig.Steamworks.PartnerApiBaseUrl = SteamworksApiBaseUrlTextBox.Text.Trim();
+        _userConfig.Steamworks.PublisherApiKey = SteamworksApiKeyPasswordBox.Password;
     }
 
     private void RefreshVdfPreview()
@@ -400,6 +438,58 @@ public partial class MainWindow : Window
         UpdateSteamCmdStatus(installed);
     }
 
+    private async void CheckSteamworksButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_operationInProgress)
+        {
+            return;
+        }
+
+        if (SelectedProject is not { } project)
+        {
+            AppendLog("Selecciona un proyecto antes de comprobar Steamworks.");
+            return;
+        }
+
+        CaptureSteamworksSettings();
+        await SaveUserConfigAsync();
+
+        try
+        {
+            _operationInProgress = true;
+            UploadBuildButton.IsEnabled = false;
+            CheckSteamworksButton.IsEnabled = false;
+            FooterStatusText.Text = "Comprobando Steamworks API...";
+            SetSteamworksStatus("Checking", (Brush)FindResource("TextMuted"), new SolidColorBrush(Color.FromRgb(107, 119, 136)), "Comprobando...");
+
+            var result = await _steamworksApiClient.CheckPublisherKeyAsync(_userConfig.Steamworks, project.AppId);
+            AppendLog(result.Message);
+
+            if (result.Success)
+            {
+                SetSteamworksStatus("Connected", (Brush)FindResource("AccentGreen"), (Brush)FindResource("AccentGreen"), result.Message);
+                FooterStatusText.Text = "Steamworks API conectada.";
+            }
+            else
+            {
+                SetSteamworksStatus("Error", (Brush)FindResource("DangerRed"), (Brush)FindResource("DangerRed"), result.Message);
+                FooterStatusText.Text = "La comprobación de Steamworks falló.";
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Comprobación de Steamworks falló: {ex.Message}");
+            SetSteamworksStatus("Error", (Brush)FindResource("DangerRed"), (Brush)FindResource("DangerRed"), ex.Message);
+            FooterStatusText.Text = "La comprobación de Steamworks falló.";
+        }
+        finally
+        {
+            _operationInProgress = false;
+            UploadBuildButton.IsEnabled = true;
+            CheckSteamworksButton.IsEnabled = true;
+        }
+    }
+
     private async void LoginSteamCmdButton_Click(object sender, RoutedEventArgs e)
     {
         if (_operationInProgress)
@@ -490,7 +580,7 @@ public partial class MainWindow : Window
 
     private async void AutoScrollCheckBox_Changed(object sender, RoutedEventArgs e)
     {
-        if (_isBindingProject)
+        if (_isBindingProject || _isLoadingConfig)
         {
             return;
         }
@@ -517,6 +607,31 @@ public partial class MainWindow : Window
         SteamCmdStatusText.Foreground = installed
             ? (System.Windows.Media.Brush)FindResource("AccentGreen")
             : (System.Windows.Media.Brush)FindResource("DangerRed");
+    }
+
+    private void UpdateSteamworksStatusFromConfig()
+    {
+        var configured = _userConfig.Steamworks is { } steamworks &&
+                         steamworks.Enabled &&
+                         !string.IsNullOrWhiteSpace(steamworks.PublisherApiKey);
+
+        if (configured)
+        {
+            SetSteamworksStatus("Configured", (Brush)FindResource("TextMuted"), (Brush)FindResource("AccentBlue"), "Key guardada localmente. Falta comprobarla.");
+        }
+        else
+        {
+            SetSteamworksStatus("Not configured", (Brush)FindResource("TextMuted"), new SolidColorBrush(Color.FromRgb(107, 119, 136)), "Introduce una Publisher Web API key.");
+        }
+    }
+
+    private void SetSteamworksStatus(string header, Brush foreground, Brush dot, string details)
+    {
+        SteamworksStatusText.Text = header;
+        SteamworksStatusText.Foreground = foreground;
+        SteamworksStatusDot.Fill = dot;
+        SteamworksConfigStatusText.Text = details;
+        SteamworksConfigStatusText.Foreground = foreground;
     }
 
     private static string NormalizeBranch(string? branch)

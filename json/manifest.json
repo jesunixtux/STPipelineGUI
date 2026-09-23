@@ -1,39 +1,39 @@
 {
-  "projects": [
+  "Projects": [
     {
-      "appId": "4053230",
-      "name": "JumpFall",
-      "branch": "default",
-      "description": "Proyecto de ejemplo para validar el pipeline local.",
-      "contentRoot": "output/4053230",
-      "buildOutput": "steampipe/cache/4053230",
-      "vdfOutput": "vdf/generated",
-      "platforms": {
-        "windows": true,
-        "linux": false,
-        "macos": false
+      "AppId": "4053230",
+      "Name": "JumpFall",
+      "Branch": "default",
+      "Description": "Proyecto de ejemplo para validar el pipeline local.",
+      "ContentRoot": "output/4053230",
+      "BuildOutput": "steampipe/cache/4053230",
+      "VdfOutput": "vdf/generated",
+      "Platforms": {
+        "Windows": true,
+        "Linux": true,
+        "Macos": true
       },
-      "depots": [
+      "Depots": [
         {
-          "depotId": "4053231",
-          "name": "Windows",
-          "platform": "windows",
-          "contentRoot": "output/4053230/windows",
-          "installScript": ""
+          "DepotId": "4053231",
+          "Name": "Windows",
+          "Platform": "windows",
+          "ContentRoot": "output/4053230/windows",
+          "InstallScript": ""
         },
         {
-          "depotId": "4053232",
-          "name": "Linux",
-          "platform": "linux",
-          "contentRoot": "output/4053230/linux",
-          "installScript": ""
+          "DepotId": "4053232",
+          "Name": "Linux",
+          "Platform": "linux",
+          "ContentRoot": "output/4053230/linux",
+          "InstallScript": ""
         },
         {
-          "depotId": "4053233",
-          "name": "macOS",
-          "platform": "macos",
-          "contentRoot": "output/4053230/macos",
-          "installScript": ""
+          "DepotId": "4053233",
+          "Name": "macOS",
+          "Platform": "macos",
+          "ContentRoot": "output/4053230/macos",
+          "InstallScript": ""
         }
       ]
     }

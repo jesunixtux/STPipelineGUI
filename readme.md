@@ -30,15 +30,20 @@ dotnet run --project .\STPipelineGUI\STPipelineGUI.csproj
   "username": "",
   "defaultBranch": "default",
   "lastProjectAppId": "",
-  "autoScrollLogs": true
+  "autoScrollLogs": true,
+  "steamworks": {
+    "enabled": true,
+    "publisherApiKey": "TU_PUBLISHER_KEY",
+    "partnerApiBaseUrl": "https://partner.steam-api.com"
+  }
 }
 ```
 
-No guardes passwords ni API keys en el codigo.
+La key se guarda únicamente en `config/user.json`, que está ignorado por Git. Desde Settings puedes comprobar que la key esté asociada al AppID del proyecto seleccionado. No se muestra en los logs ni se envía por una URL.
 
 ## Pendiente de integracion
 
 - Login completo con Steam Guard/2FA dentro de la app.
-- Sincronizacion real con Steamworks API.
-- Verificacion remota de AppID y DepotIDs.
+- Sincronizacion amplia con Steamworks API.
+- Verificacion remota de DepotIDs y builds.
 - Historial persistente de builds.

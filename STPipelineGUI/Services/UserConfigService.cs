@@ -25,7 +25,11 @@ public sealed class UserConfigService
             return new UserConfig();
         }
 
-        return JsonSerializer.Deserialize<UserConfig>(json, JsonOptions) ?? new UserConfig();
+        var config = JsonSerializer.Deserialize<UserConfig>(json, JsonOptions) ?? new UserConfig();
+        config.Steamworks ??= new SteamworksConfig();
+        config.Steamworks.PublisherApiKey ??= string.Empty;
+        config.Steamworks.PartnerApiBaseUrl ??= "https://partner.steam-api.com";
+        return config;
     }
 
     public async Task SaveAsync(string path, UserConfig config)
