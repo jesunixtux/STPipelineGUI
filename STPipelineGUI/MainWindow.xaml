@@ -137,7 +137,7 @@
                     <StackPanel DockPanel.Dock="Top">
                         <Grid Margin="0,6,0,14">
                             <TextBlock Text="Projects" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            <Button Content="+" Width="36" Height="32" HorizontalAlignment="Right" ToolTip="Future manual project creation" />
+                            <Button Content="+" Width="36" Height="32" HorizontalAlignment="Right" ToolTip="Agregar proyecto" Click="AddProjectButton_Click" />
                         </Grid>
                         <TextBox x:Name="ProjectSearchBox" TextChanged="ProjectSearchBox_TextChanged" Margin="0,0,0,14" />
                     </StackPanel>
@@ -191,12 +191,12 @@
                             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                 <TextBlock x:Name="HeaderAppIdText" Foreground="{StaticResource TextMuted}" Margin="0,0,20,0" />
                                 <TextBlock x:Name="HeaderBranchText" Foreground="{StaticResource TextMuted}" Margin="0,0,20,0" />
-                                <TextBlock Text="Steamworks sync: pending integration" Foreground="{StaticResource TextMuted}" />
+                                <TextBlock Text="Steamworks branches: available when configured" Foreground="{StaticResource TextMuted}" />
                             </StackPanel>
                             <TextBlock x:Name="ProjectDescriptionText" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,8,0,0" />
                         </StackPanel>
 
-                        <TextBlock Grid.Column="2" Text="Manual projects now. Steamworks sync later." Foreground="{StaticResource TextMuted}" FontStyle="Italic" TextWrapping="Wrap" TextAlignment="Right" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="Projects and branches are configured from the app." Foreground="{StaticResource TextMuted}" FontStyle="Italic" TextWrapping="Wrap" TextAlignment="Right" VerticalAlignment="Center" />
                     </Grid>
 
                     <TabControl x:Name="MainTabs">
@@ -227,11 +227,15 @@
                                             </StackPanel>
                                             <StackPanel Grid.Column="2">
                                                 <TextBlock Text="Branch" FontWeight="SemiBold" Margin="0,0,0,8" />
-                                                <ComboBox x:Name="BranchComboBox" IsEditable="True" SelectionChanged="BranchComboBox_SelectionChanged" LostFocus="BranchComboBox_LostFocus">
-                                                    <ComboBoxItem Content="default" />
-                                                    <ComboBoxItem Content="public" />
-                                                    <ComboBoxItem Content="beta" />
-                                                </ComboBox>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <ComboBox x:Name="BranchComboBox" IsEditable="True" SelectionChanged="BranchComboBox_SelectionChanged" LostFocus="BranchComboBox_LostFocus" />
+                                                    <Button x:Name="RefreshBranchesButton" Grid.Column="1" Content="Actualizar" Margin="8,0,0,0" Click="RefreshBranchesButton_Click" ToolTip="Cargar las ramas del AppID desde Steamworks" />
+                                                </Grid>
+                                                <TextBlock x:Name="BranchStatusText" Text="Ramas locales" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,5,0,0" />
                                             </StackPanel>
                                         </Grid>
 
@@ -255,15 +259,21 @@
                                                     <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel>
-                                                    <TextBlock Text="Output Folder (Windows)" Foreground="{StaticResource TextMuted}" Margin="0,0,0,8" />
+                                                    <TextBlock Text="Depot ID (Windows)" Foreground="{StaticResource TextMuted}" Margin="0,0,0,6" />
+                                                    <TextBox x:Name="WindowsDepotIdTextBox" TextChanged="DepotField_TextChanged" />
+                                                    <TextBlock Text="Content folder" Foreground="{StaticResource TextMuted}" Margin="0,10,0,6" />
                                                     <TextBox x:Name="WindowsPathTextBox" TextChanged="PathTextBox_TextChanged" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="2">
-                                                    <TextBlock Text="Output Folder (Linux)" Foreground="{StaticResource TextMuted}" Margin="0,0,0,8" />
+                                                    <TextBlock Text="Depot ID (Linux)" Foreground="{StaticResource TextMuted}" Margin="0,0,0,6" />
+                                                    <TextBox x:Name="LinuxDepotIdTextBox" TextChanged="DepotField_TextChanged" />
+                                                    <TextBlock Text="Content folder" Foreground="{StaticResource TextMuted}" Margin="0,10,0,6" />
                                                     <TextBox x:Name="LinuxPathTextBox" TextChanged="PathTextBox_TextChanged" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="4">
-                                                    <TextBlock Text="Output Folder (macOS)" Foreground="{StaticResource TextMuted}" Margin="0,0,0,8" />
+                                                    <TextBlock Text="Depot ID (macOS)" Foreground="{StaticResource TextMuted}" Margin="0,0,0,6" />
+                                                    <TextBox x:Name="MacosDepotIdTextBox" TextChanged="DepotField_TextChanged" />
+                                                    <TextBlock Text="Content folder" Foreground="{StaticResource TextMuted}" Margin="0,10,0,6" />
                                                     <TextBox x:Name="MacosPathTextBox" TextChanged="PathTextBox_TextChanged" />
                                                 </StackPanel>
                                             </Grid>
@@ -292,8 +302,8 @@
                                                         <TextBlock x:Name="PreflightText" Text="Run validation before upload." Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" />
                                                     </StackPanel>
                                                 </Border>
-                                                <Button Content="Comprobar SteamCMD" Margin="0,12,0,0" Click="CheckSteamCmdButton_Click" />
-                                                <Button Content="Iniciar sesion SteamCMD" Margin="0,8,0,0" Click="LoginSteamCmdButton_Click" />
+                                                <Button x:Name="CheckSteamCmdButton" Content="Comprobar SteamCMD" Margin="0,12,0,0" Click="CheckSteamCmdButton_Click" />
+                                                <Button x:Name="LoginSteamCmdButton" Content="Iniciar sesion SteamCMD" Margin="0,8,0,0" Click="LoginSteamCmdButton_Click" />
                                                 <Button Content="Crear carpetas" Margin="0,8,0,0" Click="CreateFoldersButton_Click" />
                                                 <Button Content="Validar build" Margin="0,8,0,0" Click="ValidateBuildButton_Click" />
                                             </StackPanel>
@@ -329,6 +339,8 @@
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
                                     <TextBlock Text="SteamCMD Path" Grid.Row="0" Foreground="{StaticResource TextMuted}" Margin="0,8,18,0" />
@@ -337,22 +349,28 @@
                                     <TextBlock Text="Username" Grid.Row="1" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
                                     <TextBox x:Name="UsernameTextBox" Grid.Row="1" Grid.Column="1" Margin="0,10,0,0" TextChanged="SettingsField_TextChanged" />
 
-                                    <TextBlock Text="Steamworks API URL" Grid.Row="2" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
-                                    <TextBox x:Name="SteamworksApiBaseUrlTextBox" Grid.Row="2" Grid.Column="1" Margin="0,10,0,0" TextChanged="SettingsField_TextChanged" />
+                                    <TextBlock Text="SteamCMD password" Grid.Row="2" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
+                                    <PasswordBox x:Name="SteamCmdPasswordBox" Grid.Row="2" Grid.Column="1" Margin="0,10,0,0" ToolTip="Solo se mantiene en memoria durante la operación." />
 
-                                    <TextBlock Text="Publisher API key" Grid.Row="3" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
-                                    <PasswordBox x:Name="SteamworksApiKeyPasswordBox" Grid.Row="3" Grid.Column="1" Margin="0,10,0,0" PasswordChanged="SteamworksApiKeyPasswordBox_PasswordChanged" ToolTip="Se guarda solo en config/user.json, ignorado por Git." />
+                                    <TextBlock Text="Steam Guard code" Grid.Row="3" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
+                                    <PasswordBox x:Name="SteamGuardCodePasswordBox" Grid.Row="3" Grid.Column="1" Margin="0,10,0,0" ToolTip="Opcional. Solo se mantiene en memoria durante el login." />
 
-                                    <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
+                                    <TextBlock Text="Steamworks API URL" Grid.Row="4" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
+                                    <TextBox x:Name="SteamworksApiBaseUrlTextBox" Grid.Row="4" Grid.Column="1" Margin="0,10,0,0" TextChanged="SettingsField_TextChanged" />
+
+                                    <TextBlock Text="Publisher API key" Grid.Row="5" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
+                                    <PasswordBox x:Name="SteamworksApiKeyPasswordBox" Grid.Row="5" Grid.Column="1" Margin="0,10,0,0" PasswordChanged="SteamworksApiKeyPasswordBox_PasswordChanged" ToolTip="Se guarda solo en config/user.json, ignorado por Git." />
+
+                                    <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
                                         <Button x:Name="CheckSteamworksButton" Content="Comprobar Steamworks API" Click="CheckSteamworksButton_Click" />
                                         <TextBlock x:Name="SteamworksConfigStatusText" Text="No comprobado" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="14,0,0,0" />
                                     </StackPanel>
 
-                                    <TextBlock Text="SteamPipe cache" Grid.Row="5" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
-                                    <TextBox x:Name="BuildCacheTextBox" Grid.Row="5" Grid.Column="1" Margin="0,10,0,0" TextChanged="ProjectField_TextChanged" />
+                                    <TextBlock Text="SteamPipe cache" Grid.Row="7" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
+                                    <TextBox x:Name="BuildCacheTextBox" Grid.Row="7" Grid.Column="1" Margin="0,10,0,0" TextChanged="ProjectField_TextChanged" />
 
-                                    <TextBlock Text="VDF output folder" Grid.Row="6" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
-                                    <TextBox x:Name="VdfOutputTextBox" Grid.Row="6" Grid.Column="1" Margin="0,10,0,0" TextChanged="ProjectField_TextChanged" />
+                                    <TextBlock Text="VDF output folder" Grid.Row="8" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
+                                    <TextBox x:Name="VdfOutputTextBox" Grid.Row="8" Grid.Column="1" Margin="0,10,0,0" TextChanged="ProjectField_TextChanged" />
                                 </Grid>
                             </Border>
                         </TabItem>

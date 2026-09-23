@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private bool _isBindingProject;
     private bool _isLoadingConfig;
     private bool _operationInProgress;
+    private CancellationTokenSource? _branchLoadCts;
 
     public MainWindow()
     {
@@ -63,6 +64,7 @@ public partial class MainWindow : Window
             var remembered = _visibleProjects.FirstOrDefault(p => p.AppId == _userConfig.LastProjectAppId);
             ProjectsList.SelectedItem = remembered ?? _visibleProjects.FirstOrDefault();
             BindProject(SelectedProject);
+            await LoadBranchesForProjectAsync(SelectedProject);
 
             UpdateSteamCmdStatus(File.Exists(_steamCmdRunner.ResolveSteamCmdPath(_userConfig)));
             UpdateSteamworksStatusFromConfig();
@@ -101,13 +103,115 @@ public partial class MainWindow : Window
 
     private async void ProjectsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        BindProject(SelectedProject);
+        var project = SelectedProject;
+        BindProject(project);
 
-        if (SelectedProject is { } project && !_isBindingProject)
+        if (project is not null && !_isBindingProject)
         {
             _userConfig.LastProjectAppId = project.AppId;
             await SaveUserConfigAsync();
         }
+
+        await LoadBranchesForProjectAsync(project);
+    }
+
+    private async void AddProjectButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_operationInProgress)
+        {
+            return;
+        }
+
+        var dialog = new AddProjectWindow
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() != true || dialog.Project is not { } project)
+        {
+            return;
+        }
+
+        if (_manifest.Projects.Any(existing => existing.AppId.Equals(project.AppId, StringComparison.OrdinalIgnoreCase)))
+        {
+            MessageBox.Show("Ya existe un proyecto con ese AppID.", "Proyecto duplicado", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        _manifest.Projects.Add(project);
+        ProjectSearchBox.Clear();
+        ApplyProjectFilter();
+        ProjectsList.SelectedItem = project;
+        await SaveAllAsync();
+        AppendLog($"Proyecto agregado: {project.Name} ({project.AppId}).");
+    }
+
+    private async Task LoadBranchesForProjectAsync(SteamProject? project)
+    {
+        _branchLoadCts?.Cancel();
+
+        if (project is null)
+        {
+            return;
+        }
+
+        using var cts = new CancellationTokenSource();
+        _branchLoadCts = cts;
+        SetBranchOptions(project, [NormalizeBranch(project.Branch), "default"]);
+
+        if (!_userConfig.Steamworks.Enabled || string.IsNullOrWhiteSpace(_userConfig.Steamworks.PublisherApiKey))
+        {
+            BranchStatusText.Text = "Configura Steamworks para cargar las ramas reales.";
+            return;
+        }
+
+        RefreshBranchesButton.IsEnabled = false;
+        BranchStatusText.Text = "Cargando ramas desde Steamworks...";
+
+        try
+        {
+            var result = await _steamworksApiClient.GetBranchesAsync(_userConfig.Steamworks, project.AppId, cts.Token);
+            if (cts.IsCancellationRequested || !ReferenceEquals(SelectedProject, project))
+            {
+                return;
+            }
+
+            if (result.Success)
+            {
+                var branches = result.Branches
+                    .Append(NormalizeBranch(project.Branch))
+                    .Append("default");
+                SetBranchOptions(project, branches);
+                BranchStatusText.Text = result.Message;
+            }
+            else
+            {
+                BranchStatusText.Text = result.Message;
+                AppendLog($"Steamworks ramas: {result.Message}");
+            }
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            if (!cts.IsCancellationRequested && ReferenceEquals(SelectedProject, project))
+            {
+                RefreshBranchesButton.IsEnabled = true;
+            }
+        }
+    }
+
+    private void SetBranchOptions(SteamProject project, IEnumerable<string> branches)
+    {
+        var options = branches
+            .Where(branch => !string.IsNullOrWhiteSpace(branch))
+            .Select(branch => branch.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        BranchComboBox.ItemsSource = options;
+        BranchComboBox.Text = NormalizeBranch(project.Branch);
     }
 
     private void BindProject(SteamProject? project)
@@ -122,11 +226,17 @@ public partial class MainWindow : Window
             HeaderBranchText.Text = "Branch: -";
             AppIdTextBox.Text = string.Empty;
             BranchComboBox.Text = "default";
+            BranchComboBox.ItemsSource = Array.Empty<string>();
+            BranchStatusText.Text = "No hay proyecto seleccionado.";
+            RefreshBranchesButton.IsEnabled = false;
             BuildCacheTextBox.Text = string.Empty;
             VdfOutputTextBox.Text = "vdf/generated";
             WindowsCheckBox.IsChecked = false;
             LinuxCheckBox.IsChecked = false;
             MacosCheckBox.IsChecked = false;
+            WindowsDepotIdTextBox.Text = string.Empty;
+            LinuxDepotIdTextBox.Text = string.Empty;
+            MacosDepotIdTextBox.Text = string.Empty;
             WindowsPathTextBox.Text = string.Empty;
             LinuxPathTextBox.Text = string.Empty;
             MacosPathTextBox.Text = string.Empty;
@@ -142,12 +252,18 @@ public partial class MainWindow : Window
         HeaderAppIdText.Text = $"AppID: {project.AppId}";
         HeaderBranchText.Text = $"Branch: {NormalizeBranch(project.Branch)}";
         AppIdTextBox.Text = project.AppId;
+        SetBranchOptions(project, [NormalizeBranch(project.Branch)]);
+        BranchStatusText.Text = "Rama guardada localmente. Pulsa Actualizar para consultar Steamworks.";
+        RefreshBranchesButton.IsEnabled = true;
         BranchComboBox.Text = NormalizeBranch(project.Branch);
         BuildCacheTextBox.Text = project.BuildOutput;
         VdfOutputTextBox.Text = project.VdfOutput;
         WindowsCheckBox.IsChecked = project.Platforms.Windows;
         LinuxCheckBox.IsChecked = project.Platforms.Linux;
         MacosCheckBox.IsChecked = project.Platforms.Macos;
+        WindowsDepotIdTextBox.Text = GetDepot(project, "windows")?.DepotId ?? string.Empty;
+        LinuxDepotIdTextBox.Text = GetDepot(project, "linux")?.DepotId ?? string.Empty;
+        MacosDepotIdTextBox.Text = GetDepot(project, "macos")?.DepotId ?? string.Empty;
         WindowsPathTextBox.Text = GetDepot(project, "windows")?.ContentRoot ?? string.Empty;
         LinuxPathTextBox.Text = GetDepot(project, "linux")?.ContentRoot ?? string.Empty;
         MacosPathTextBox.Text = GetDepot(project, "macos")?.ContentRoot ?? string.Empty;
@@ -276,6 +392,20 @@ public partial class MainWindow : Window
         EnsureDepot(project, "windows").ContentRoot = WindowsPathTextBox.Text.Trim();
         EnsureDepot(project, "linux").ContentRoot = LinuxPathTextBox.Text.Trim();
         EnsureDepot(project, "macos").ContentRoot = MacosPathTextBox.Text.Trim();
+        RefreshVdfPreview();
+        UpdatePreflight(project);
+    }
+
+    private void DepotField_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_isBindingProject || SelectedProject is not { } project)
+        {
+            return;
+        }
+
+        EnsureDepot(project, "windows").DepotId = WindowsDepotIdTextBox.Text.Trim();
+        EnsureDepot(project, "linux").DepotId = LinuxDepotIdTextBox.Text.Trim();
+        EnsureDepot(project, "macos").DepotId = MacosDepotIdTextBox.Text.Trim();
         RefreshVdfPreview();
         UpdatePreflight(project);
     }
@@ -432,10 +562,31 @@ public partial class MainWindow : Window
         UpdatePreflight(project);
     }
 
-    private void CheckSteamCmdButton_Click(object sender, RoutedEventArgs e)
+    private async void CheckSteamCmdButton_Click(object sender, RoutedEventArgs e)
     {
-        var installed = _steamCmdRunner.CheckInstallation(_userConfig, AppendLog);
-        UpdateSteamCmdStatus(installed);
+        if (_operationInProgress)
+        {
+            return;
+        }
+
+        await RunOperationAsync(
+            "SteamCMD check",
+            async () =>
+            {
+                var exitCode = await _steamCmdRunner.CheckInstallationAsync(_userConfig, AppendLog);
+                UpdateSteamCmdStatus(exitCode == 0);
+                return exitCode;
+            });
+    }
+
+    private async void RefreshBranchesButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_operationInProgress)
+        {
+            return;
+        }
+
+        await LoadBranchesForProjectAsync(SelectedProject);
     }
 
     private async void CheckSteamworksButton_Click(object sender, RoutedEventArgs e)
@@ -497,7 +648,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        await RunOperationAsync("SteamCMD login", () => _steamCmdRunner.LoginAsync(_userConfig, AppendLog));
+        await RunOperationAsync(
+            "SteamCMD login",
+            () => _steamCmdRunner.LoginAsync(_userConfig, AppendLog, credentials: GetSteamCmdCredentials()));
     }
 
     private async void UploadBuildButton_Click(object sender, RoutedEventArgs e)
@@ -537,7 +690,9 @@ public partial class MainWindow : Window
             AppendLog($"  {file}");
         }
 
-        await RunOperationAsync("Upload Build", () => _steamCmdRunner.UploadBuildAsync(_userConfig, appBuildPath, AppendLog));
+        await RunOperationAsync(
+            "Upload Build",
+            () => _steamCmdRunner.UploadBuildAsync(_userConfig, appBuildPath, AppendLog, credentials: GetSteamCmdCredentials()));
     }
 
     private async Task RunOperationAsync(string label, Func<Task<int>> operation)
@@ -546,6 +701,9 @@ public partial class MainWindow : Window
         {
             _operationInProgress = true;
             UploadBuildButton.IsEnabled = false;
+            CheckSteamCmdButton.IsEnabled = false;
+            LoginSteamCmdButton.IsEnabled = false;
+            RefreshBranchesButton.IsEnabled = false;
             FooterStatusText.Text = $"{label} en progreso...";
             var exitCode = await operation();
             FooterStatusText.Text = exitCode == 0 ? $"{label} finalizado." : $"{label} finalizo con codigo {exitCode}.";
@@ -559,6 +717,11 @@ public partial class MainWindow : Window
         {
             _operationInProgress = false;
             UploadBuildButton.IsEnabled = true;
+            CheckSteamCmdButton.IsEnabled = true;
+            LoginSteamCmdButton.IsEnabled = true;
+            RefreshBranchesButton.IsEnabled = SelectedProject is not null;
+            SteamCmdPasswordBox.Clear();
+            SteamGuardCodePasswordBox.Clear();
         }
     }
 
@@ -576,6 +739,15 @@ public partial class MainWindow : Window
                "Plataformas y depots:\n" +
                string.Join(Environment.NewLine, selectedDepots) +
                "\n\nNo se hara SetLive para la rama default. No continues si estos DepotIDs no fueron verificados en Steamworks.";
+    }
+
+    private SteamCmdCredentials? GetSteamCmdCredentials()
+    {
+        var password = SteamCmdPasswordBox.Password;
+        var guardCode = SteamGuardCodePasswordBox.Password;
+        return string.IsNullOrEmpty(password) && string.IsNullOrEmpty(guardCode)
+            ? null
+            : new SteamCmdCredentials(password, guardCode);
     }
 
     private async void AutoScrollCheckBox_Changed(object sender, RoutedEventArgs e)

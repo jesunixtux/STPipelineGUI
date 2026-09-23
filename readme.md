@@ -1,16 +1,19 @@
 # STPipelineGUI
 
-Base WPF para preparar builds de SteamPipe desde un manifest local.
+Aplicación WPF para preparar builds de SteamPipe desde proyectos configurados por el usuario.
 
 ## Estado MVP
 
 - Carga `json/manifest.json`.
 - Carga `config/user.json` si existe, sin exigir credenciales.
-- Muestra proyectos, datos principales, depots y plataformas.
+- Permite agregar proyectos desde la GUI, sin ejemplos preconfigurados.
+- Muestra proyectos, datos principales, DepotIDs y plataformas.
 - Crea `output/{AppID}/{windows|linux|macos}` solo para plataformas seleccionadas.
 - Genera VDF basicos en `vdf/generated`.
 - Separa comprobacion de SteamCMD, login, validacion local, generacion VDF y upload.
-- Deja preparado `SteamCmdRunner` para ejecutar `steamcmd.exe` y capturar salida en tiempo real.
+- Ejecuta SteamCMD y captura salida y errores en tiempo real.
+- Mantiene password y Steam Guard solo en memoria durante login/upload.
+- Consulta las ramas del AppID desde Steamworks cuando la Publisher API key tiene acceso.
 - Muestra logs dentro de la GUI.
 - Pide confirmacion antes de ejecutar un upload real.
 
@@ -43,7 +46,6 @@ La key se guarda únicamente en `config/user.json`, que está ignorado por Git. 
 
 ## Pendiente de integracion
 
-- Login completo con Steam Guard/2FA dentro de la app.
 - Sincronizacion amplia con Steamworks API.
 - Verificacion remota de DepotIDs y builds.
 - Historial persistente de builds.
