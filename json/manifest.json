@@ -1,0 +1,40 @@
+{
+  "projects": [
+    {
+      "appId": "4053230",
+      "name": "JumpFall",
+      "branch": "default",
+      "description": "Proyecto de ejemplo para validar el pipeline local.",
+      "contentRoot": "output/4053230",
+      "buildOutput": "vdf/generated",
+      "platforms": {
+        "windows": true,
+        "linux": false,
+        "macos": false
+      },
+      "depots": [
+        {
+          "depotId": "4053231",
+          "name": "Windows",
+          "platform": "windows",
+          "contentRoot": "output/4053230/windows",
+          "installScript": ""
+        },
+        {
+          "depotId": "4053232",
+          "name": "Linux",
+          "platform": "linux",
+          "contentRoot": "output/4053230/linux",
+          "installScript": ""
+        },
+        {
+          "depotId": "4053233",
+          "name": "macOS",
+          "platform": "macos",
+          "contentRoot": "output/4053230/macos",
+          "installScript": ""
+        }
+      ]
+    }
+  ]
+}
