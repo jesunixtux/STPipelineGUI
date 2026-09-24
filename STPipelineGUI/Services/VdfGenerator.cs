@@ -55,7 +55,7 @@ public sealed class VdfGenerator
     {
         var errors = new List<string>();
 
-        if (!ulong.TryParse(project.AppId, out _))
+        if (!uint.TryParse(project.AppId, out var appId) || appId == 0)
         {
             errors.Add("AppID invalido o vacio.");
         }
@@ -68,7 +68,7 @@ public sealed class VdfGenerator
 
         foreach (var depot in selectedDepots)
         {
-            if (!ulong.TryParse(depot.DepotId, out _))
+            if (!uint.TryParse(depot.DepotId, out var depotId) || depotId == 0)
             {
                 errors.Add($"DepotID invalido para {depot.Platform}: {depot.DepotId}");
             }

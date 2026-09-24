@@ -1,3 +1,41 @@
 {
-  "Projects": []
+  "Projects": [
+    {
+      "AppId": "4061950",
+      "Name": "Jumpfall Demo",
+      "Branch": "default",
+      "Description": "jus\u00B4t a demo",
+      "ContentRoot": "output/4061950",
+      "BuildOutput": "steampipe/cache/4061950",
+      "VdfOutput": "vdf/generated",
+      "Platforms": {
+        "Windows": true,
+        "Linux": false,
+        "Macos": false
+      },
+      "Depots": [
+        {
+          "DepotId": "4061951",
+          "Name": "Windows",
+          "Platform": "windows",
+          "ContentRoot": "output/4061950/windows",
+          "InstallScript": ""
+        },
+        {
+          "DepotId": "",
+          "Name": "Linux",
+          "Platform": "linux",
+          "ContentRoot": "output/4061950/linux",
+          "InstallScript": ""
+        },
+        {
+          "DepotId": "",
+          "Name": "macOS",
+          "Platform": "macos",
+          "ContentRoot": "output/4061950/macos",
+          "InstallScript": ""
+        }
+      ]
+    }
+  ]
 }

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using STPipelineGUI.Models;
 
 namespace STPipelineGUI.Services;
@@ -9,6 +10,9 @@ public sealed record SteamCmdCredentials(string Password, string GuardCode);
 public sealed class SteamCmdRunner
 {
     private readonly PathService _paths;
+    private readonly object _processLock = new();
+    private readonly object _inputLock = new();
+    private Process? _activeProcess;
 
     public SteamCmdRunner(PathService paths)
     {
@@ -17,17 +21,65 @@ public sealed class SteamCmdRunner
 
     public string ResolveSteamCmdPath(UserConfig config) => _paths.Resolve(config.SteamCmdPath);
 
+    public bool TrySendInput(string input, Action<string> onOutput)
+    {
+        if (string.IsNullOrEmpty(input))
+        {
+            return false;
+        }
+
+        Process? process;
+        lock (_processLock)
+        {
+            process = _activeProcess;
+        }
+
+        if (process is null)
+        {
+            EmitLine(onOutput, "No hay una sesión SteamCMD activa esperando entrada.");
+            return false;
+        }
+
+        try
+        {
+            lock (_inputLock)
+            {
+                if (process.HasExited)
+                {
+                    EmitLine(onOutput, "La sesión SteamCMD ya terminó.");
+                    return false;
+                }
+
+                process.StandardInput.WriteLine(input);
+                process.StandardInput.Flush();
+            }
+
+            EmitLine(onOutput, "Entrada enviada a SteamCMD sin mostrarla en la consola.");
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            EmitLine(onOutput, "SteamCMD ya no acepta entrada en este momento.");
+            return false;
+        }
+        catch (IOException)
+        {
+            EmitLine(onOutput, "No se pudo enviar la entrada a SteamCMD.");
+            return false;
+        }
+    }
+
     public bool CheckInstallation(UserConfig config, Action<string> onOutput)
     {
         var steamCmdPath = ResolveSteamCmdPath(config);
         if (File.Exists(steamCmdPath))
         {
-            onOutput($"SteamCMD encontrado: {steamCmdPath}");
+            EmitLine(onOutput, $"SteamCMD encontrado: {steamCmdPath}");
             return true;
         }
 
-        onOutput($"SteamCMD no encontrado en: {steamCmdPath}");
-        onOutput("Instala steamcmd.exe o ajusta config/user.json. Esta comprobacion no ejecuta uploads.");
+        EmitLine(onOutput, $"SteamCMD no encontrado en: {steamCmdPath}");
+        EmitLine(onOutput, "Instala steamcmd.exe o ajusta config/user.json. Esta comprobacion no ejecuta uploads.");
         return false;
     }
 
@@ -39,11 +91,11 @@ public sealed class SteamCmdRunner
         var steamCmdPath = ResolveSteamCmdPath(config);
         if (!File.Exists(steamCmdPath))
         {
-            onOutput($"SteamCMD no encontrado en: {steamCmdPath}");
+            EmitLine(onOutput, $"SteamCMD no encontrado en: {steamCmdPath}");
             return -1;
         }
 
-        onOutput("Comprobando SteamCMD con +quit. No se ejecutará ninguna subida.");
+        EmitLine(onOutput, "Comprobando SteamCMD con +quit. No se ejecutará ninguna subida.");
         return await RunSteamCmdAsync(config, onOutput, cancellationToken, null, "+quit");
     }
 
@@ -53,7 +105,13 @@ public sealed class SteamCmdRunner
         CancellationToken cancellationToken = default,
         SteamCmdCredentials? credentials = null)
     {
-        var username = string.IsNullOrWhiteSpace(config.Username) ? "anonymous" : config.Username;
+        if (string.IsNullOrWhiteSpace(config.Username))
+        {
+            EmitLine(onOutput, "Configura tu usuario de Steam antes de iniciar sesión.");
+            return Task.FromResult(-1);
+        }
+
+        var username = config.Username.Trim();
         return RunSteamCmdAsync(config, onOutput, cancellationToken, credentials, "+login", username, "+quit");
     }
 
@@ -66,11 +124,17 @@ public sealed class SteamCmdRunner
     {
         if (!File.Exists(appBuildVdfPath))
         {
-            onOutput($"No existe el app_build VDF: {appBuildVdfPath}");
+            EmitLine(onOutput, $"No existe el app_build VDF: {appBuildVdfPath}");
             return -1;
         }
 
-        var username = string.IsNullOrWhiteSpace(config.Username) ? "anonymous" : config.Username;
+        if (string.IsNullOrWhiteSpace(config.Username))
+        {
+            EmitLine(onOutput, "Configura tu usuario de Steam antes de subir una build.");
+            return -1;
+        }
+
+        var username = config.Username.Trim();
         return await RunSteamCmdAsync(config, onOutput, cancellationToken, credentials, "+login", username, "+run_app_build", appBuildVdfPath, "+quit");
     }
 
@@ -84,7 +148,7 @@ public sealed class SteamCmdRunner
         var steamCmdPath = ResolveSteamCmdPath(config);
         if (!File.Exists(steamCmdPath))
         {
-            onOutput($"SteamCMD no encontrado en: {steamCmdPath}");
+            EmitLine(onOutput, $"SteamCMD no encontrado en: {steamCmdPath}");
             return -1;
         }
 
@@ -96,7 +160,9 @@ public sealed class SteamCmdRunner
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             RedirectStandardInput = true,
-            CreateNoWindow = true
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
         };
 
         foreach (var argument in arguments)
@@ -105,42 +171,70 @@ public sealed class SteamCmdRunner
         }
 
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-        var inputLock = new object();
         var passwordSent = false;
         var guardCodeSent = false;
+        var guardPromptReported = false;
+        var promptBuffer = new StringBuilder();
+        var promptLock = new object();
 
-        void HandleLine(string? line)
+        void HandleChunk(string chunk)
         {
-            AppendLine(line, onOutput);
-            if (string.IsNullOrWhiteSpace(line) || credentials is null)
+            if (string.IsNullOrEmpty(chunk))
             {
                 return;
             }
 
-            if (!passwordSent && !string.IsNullOrEmpty(credentials.Password) && IsPasswordPrompt(line))
+            onOutput(chunk);
+
+            string promptText;
+            lock (promptLock)
             {
-                SendInput(credentials.Password, ref passwordSent, inputLock, process, onOutput);
+                promptBuffer.Append(chunk);
+                if (promptBuffer.Length > 2048)
+                {
+                    promptBuffer.Remove(0, promptBuffer.Length - 2048);
+                }
+
+                promptText = promptBuffer.ToString();
             }
 
-            if (!guardCodeSent && !string.IsNullOrEmpty(credentials.GuardCode) && IsGuardCodePrompt(line))
+            if (!guardPromptReported && IsGuardCodePrompt(promptText))
             {
-                SendInput(credentials.GuardCode, ref guardCodeSent, inputLock, process, onOutput);
+                EmitLine(onOutput, "Steam Guard requiere una nueva autenticacion. Usa el campo de entrada de la consola para enviar el codigo.");
+                guardPromptReported = true;
+            }
+
+            if (credentials is null)
+            {
+                return;
+            }
+
+            if (!passwordSent && !string.IsNullOrEmpty(credentials.Password) && IsPasswordPrompt(promptText))
+            {
+                SendInput(credentials.Password, ref passwordSent, process, onOutput);
+            }
+
+            if (!guardCodeSent && !string.IsNullOrEmpty(credentials.GuardCode) && IsGuardCodePrompt(promptText))
+            {
+                SendInput(credentials.GuardCode, ref guardCodeSent, process, onOutput);
             }
         }
 
-        process.OutputDataReceived += (_, args) => HandleLine(args.Data);
-        process.ErrorDataReceived += (_, args) => HandleLine(args.Data);
-
-        onOutput($"Ejecutando SteamCMD: {steamCmdPath}");
-        onOutput($"SteamCMD args: {string.Join(' ', arguments.Select(SanitizeArgument))}");
+        EmitLine(onOutput, $"Ejecutando SteamCMD: {steamCmdPath}");
+        EmitLine(onOutput, $"SteamCMD args: {string.Join(' ', arguments.Select(SanitizeArgument))}");
         if (!process.Start())
         {
-            onOutput("SteamCMD no pudo iniciar el proceso.");
+            EmitLine(onOutput, "SteamCMD no pudo iniciar el proceso.");
             return -1;
         }
 
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+        lock (_processLock)
+        {
+            _activeProcess = process;
+        }
+
+        var standardOutputTask = ReadStreamAsync(process.StandardOutput, HandleChunk, cancellationToken);
+        var standardErrorTask = ReadStreamAsync(process.StandardError, HandleChunk, cancellationToken);
 
         try
         {
@@ -153,40 +247,64 @@ public sealed class SteamCmdRunner
                 process.Kill(entireProcessTree: true);
             }
 
-            onOutput("SteamCMD cancelado.");
+            try
+            {
+                await Task.WhenAll(standardOutputTask, standardErrorTask);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The readers are expected to stop with the same cancellation token.
+            }
+
+            EmitLine(onOutput, "SteamCMD cancelado.");
+            ClearActiveProcess(process);
             return -2;
         }
 
-        onOutput($"SteamCMD finalizo con codigo {process.ExitCode}.");
+        try
+        {
+            await Task.WhenAll(standardOutputTask, standardErrorTask);
+        }
+        finally
+        {
+            ClearActiveProcess(process);
+        }
+
+        EmitLine(onOutput, $"SteamCMD finalizo con codigo {process.ExitCode}.");
 
         return process.ExitCode;
     }
 
-    private static void AppendLine(string? line, Action<string> onOutput)
+    private static async Task ReadStreamAsync(
+        StreamReader reader,
+        Action<string> onOutput,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(line))
+        var buffer = new char[1024];
+        while (true)
         {
-            return;
-        }
+            var count = await reader.ReadAsync(buffer.AsMemory(), cancellationToken);
+            if (count == 0)
+            {
+                return;
+            }
 
-        onOutput(line);
-
-        if (line.Contains("Steam Guard", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("two-factor", StringComparison.OrdinalIgnoreCase) ||
-            line.Contains("2FA", StringComparison.OrdinalIgnoreCase))
-        {
-            onOutput("Steam Guard requiere una nueva autenticacion. Completa el login fuera de la app o agrega el flujo 2FA en una fase posterior.");
+            onOutput(new string(buffer, 0, count));
         }
     }
 
-    private static void SendInput(
+    private static void EmitLine(Action<string> onOutput, string message)
+    {
+        onOutput(message + Environment.NewLine);
+    }
+
+    private void SendInput(
         string secret,
         ref bool sent,
-        object inputLock,
         Process process,
         Action<string> onOutput)
     {
-        lock (inputLock)
+        lock (_inputLock)
         {
             if (sent || process.HasExited)
             {
@@ -196,7 +314,18 @@ public sealed class SteamCmdRunner
             process.StandardInput.WriteLine(secret);
             process.StandardInput.Flush();
             sent = true;
-            onOutput("Credencial enviada a SteamCMD sin mostrarla en la consola.");
+            EmitLine(onOutput, "Credencial enviada a SteamCMD sin mostrarla en la consola.");
+        }
+    }
+
+    private void ClearActiveProcess(Process process)
+    {
+        lock (_processLock)
+        {
+            if (ReferenceEquals(_activeProcess, process))
+            {
+                _activeProcess = null;
+            }
         }
     }
 

@@ -40,7 +40,25 @@ public sealed class UserConfigService
             Directory.CreateDirectory(directory);
         }
 
+        config.Steamworks ??= new SteamworksConfig();
         var json = JsonSerializer.Serialize(config, JsonOptions);
-        await File.WriteAllTextAsync(path, json);
+        await WriteAtomicallyAsync(path, json);
+    }
+
+    private static async Task WriteAtomicallyAsync(string path, string content)
+    {
+        var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            await File.WriteAllTextAsync(temporaryPath, content);
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                File.Delete(temporaryPath);
+            }
+        }
     }
 }

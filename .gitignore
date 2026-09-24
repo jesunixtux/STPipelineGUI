@@ -41,6 +41,7 @@ json/projects/
 # -------------------------------------------------
 # Generated SteamPipe files
 # -------------------------------------------------
+steampipe/
 vdf/generated/
 *.vdf.tmp
 

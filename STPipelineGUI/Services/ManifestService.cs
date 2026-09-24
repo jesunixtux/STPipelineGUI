@@ -37,6 +37,23 @@ public sealed class ManifestService
         }
 
         var json = JsonSerializer.Serialize(manifest, JsonOptions);
-        await File.WriteAllTextAsync(path, json);
+        await WriteAtomicallyAsync(path, json);
+    }
+
+    private static async Task WriteAtomicallyAsync(string path, string content)
+    {
+        var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            await File.WriteAllTextAsync(temporaryPath, content);
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                File.Delete(temporaryPath);
+            }
+        }
     }
 }

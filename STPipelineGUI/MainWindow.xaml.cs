@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -22,7 +23,10 @@ public partial class MainWindow : Window
     private bool _isBindingProject;
     private bool _isLoadingConfig;
     private bool _operationInProgress;
+    private bool _steamCmdConsoleAtLineStart = true;
     private CancellationTokenSource? _branchLoadCts;
+    private CancellationTokenSource? _saveCts;
+    private readonly SemaphoreSlim _saveLock = new(1, 1);
 
     public MainWindow()
     {
@@ -46,6 +50,7 @@ public partial class MainWindow : Window
             _manifest = await _manifestService.LoadAsync(_paths.ManifestPath);
             _userConfig = await _userConfigService.LoadAsync(_paths.UserConfigPath);
             _userConfig.Steamworks ??= new SteamworksConfig();
+            _userConfig.Steamworks.Enabled = !string.IsNullOrWhiteSpace(_userConfig.Steamworks.PublisherApiKey);
             _isLoadingConfig = true;
             try
             {
@@ -103,16 +108,23 @@ public partial class MainWindow : Window
 
     private async void ProjectsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var project = SelectedProject;
-        BindProject(project);
-
-        if (project is not null && !_isBindingProject)
+        try
         {
-            _userConfig.LastProjectAppId = project.AppId;
-            await SaveUserConfigAsync();
-        }
+            var project = SelectedProject;
+            BindProject(project);
 
-        await LoadBranchesForProjectAsync(project);
+            if (project is not null && !_isBindingProject)
+            {
+                _userConfig.LastProjectAppId = project.AppId;
+                await SaveUserConfigAsync();
+            }
+
+            await LoadBranchesForProjectAsync(project);
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"No se pudo cambiar de proyecto: {ex.Message}");
+        }
     }
 
     private async void AddProjectButton_Click(object sender, RoutedEventArgs e)
@@ -148,28 +160,29 @@ public partial class MainWindow : Window
 
     private async Task LoadBranchesForProjectAsync(SteamProject? project)
     {
-        _branchLoadCts?.Cancel();
+        CancelBranchLoad();
 
         if (project is null)
         {
             return;
         }
 
-        using var cts = new CancellationTokenSource();
+        var cts = new CancellationTokenSource();
         _branchLoadCts = cts;
-        SetBranchOptions(project, [NormalizeBranch(project.Branch), "default"]);
-
-        if (!_userConfig.Steamworks.Enabled || string.IsNullOrWhiteSpace(_userConfig.Steamworks.PublisherApiKey))
-        {
-            BranchStatusText.Text = "Configura Steamworks para cargar las ramas reales.";
-            return;
-        }
-
-        RefreshBranchesButton.IsEnabled = false;
-        BranchStatusText.Text = "Cargando ramas desde Steamworks...";
 
         try
         {
+            SetBranchOptions(project, [NormalizeBranch(project.Branch), "default"]);
+
+            if (!_userConfig.Steamworks.Enabled || string.IsNullOrWhiteSpace(_userConfig.Steamworks.PublisherApiKey))
+            {
+                BranchStatusText.Text = "Configura Steamworks para cargar las ramas reales.";
+                return;
+            }
+
+            RefreshBranchesButton.IsEnabled = false;
+            BranchStatusText.Text = "Cargando ramas desde Steamworks...";
+
             var result = await _steamworksApiClient.GetBranchesAsync(_userConfig.Steamworks, project.AppId, cts.Token);
             if (cts.IsCancellationRequested || !ReferenceEquals(SelectedProject, project))
             {
@@ -193,12 +206,43 @@ public partial class MainWindow : Window
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
         }
+        catch (Exception ex)
+        {
+            BranchStatusText.Text = "No se pudieron cargar las ramas.";
+            AppendLog($"Steamworks ramas: {ex.Message}");
+        }
         finally
         {
             if (!cts.IsCancellationRequested && ReferenceEquals(SelectedProject, project))
             {
                 RefreshBranchesButton.IsEnabled = true;
             }
+
+            if (ReferenceEquals(_branchLoadCts, cts))
+            {
+                _branchLoadCts = null;
+            }
+
+            cts.Dispose();
+        }
+    }
+
+    private void CancelBranchLoad()
+    {
+        var cts = _branchLoadCts;
+        _branchLoadCts = null;
+
+        if (cts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
         }
     }
 
@@ -340,9 +384,11 @@ public partial class MainWindow : Window
         project.AppId = AppIdTextBox.Text.Trim();
         project.BuildOutput = BuildCacheTextBox.Text.Trim();
         project.VdfOutput = VdfOutputTextBox.Text.Trim();
+        _userConfig.LastProjectAppId = project.AppId;
         HeaderAppIdText.Text = $"AppID: {project.AppId}";
         RefreshVdfPreview();
         UpdatePreflight(project);
+        ScheduleSave();
     }
 
     private void BranchComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -366,6 +412,7 @@ public partial class MainWindow : Window
         HeaderBranchText.Text = $"Branch: {project.Branch}";
         RefreshVdfPreview();
         UpdatePreflight(project);
+        ScheduleSave();
     }
 
     private void PlatformCheckBox_Changed(object sender, RoutedEventArgs e)
@@ -380,6 +427,7 @@ public partial class MainWindow : Window
         project.Platforms.Macos = MacosCheckBox.IsChecked == true;
         RefreshVdfPreview();
         UpdatePreflight(project);
+        ScheduleSave();
     }
 
     private void PathTextBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -394,6 +442,7 @@ public partial class MainWindow : Window
         EnsureDepot(project, "macos").ContentRoot = MacosPathTextBox.Text.Trim();
         RefreshVdfPreview();
         UpdatePreflight(project);
+        ScheduleSave();
     }
 
     private void DepotField_TextChanged(object sender, TextChangedEventArgs e)
@@ -408,9 +457,10 @@ public partial class MainWindow : Window
         EnsureDepot(project, "macos").DepotId = MacosDepotIdTextBox.Text.Trim();
         RefreshVdfPreview();
         UpdatePreflight(project);
+        ScheduleSave();
     }
 
-    private async void SettingsField_TextChanged(object sender, TextChangedEventArgs e)
+    private void SettingsField_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (_isBindingProject || _isLoadingConfig)
         {
@@ -422,7 +472,7 @@ public partial class MainWindow : Window
         _userConfig.Steamworks.PartnerApiBaseUrl = SteamworksApiBaseUrlTextBox.Text.Trim();
         UpdateSteamCmdStatus(File.Exists(_steamCmdRunner.ResolveSteamCmdPath(_userConfig)));
         UpdateSteamworksStatusFromConfig();
-        await SaveUserConfigAsync();
+        ScheduleSave();
     }
 
     private void SteamworksApiKeyPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
@@ -433,13 +483,24 @@ public partial class MainWindow : Window
         }
 
         _userConfig.Steamworks.PublisherApiKey = SteamworksApiKeyPasswordBox.Password;
+        _userConfig.Steamworks.Enabled = !string.IsNullOrWhiteSpace(_userConfig.Steamworks.PublisherApiKey);
         UpdateSteamworksStatusFromConfig();
+        ScheduleSave();
     }
 
     private async void SaveChangesButton_Click(object sender, RoutedEventArgs e)
     {
-        CaptureSteamworksSettings();
-        await SaveAllAsync();
+        try
+        {
+            _saveCts?.Cancel();
+            CaptureSteamworksSettings();
+            await SaveAllAsync();
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"No se pudieron guardar los cambios: {ex.Message}");
+            FooterStatusText.Text = "Error al guardar cambios.";
+        }
     }
 
     private async Task SaveAllAsync()
@@ -451,8 +512,17 @@ public partial class MainWindow : Window
             _userConfig.LastProjectAppId = project.AppId;
         }
 
-        await _manifestService.SaveAsync(_paths.ManifestPath, _manifest);
-        await SaveUserConfigAsync();
+        await _saveLock.WaitAsync();
+        try
+        {
+            await _manifestService.SaveAsync(_paths.ManifestPath, _manifest);
+            await SaveUserConfigFileAsync();
+        }
+        finally
+        {
+            _saveLock.Release();
+        }
+
         AppendLog("Cambios guardados.");
     }
 
@@ -460,7 +530,58 @@ public partial class MainWindow : Window
     {
         CaptureSteamworksSettings();
         _userConfig.AutoScrollLogs = AutoScrollCheckBox.IsChecked == true;
-        await _userConfigService.SaveAsync(_paths.UserConfigPath, _userConfig);
+        await _saveLock.WaitAsync();
+        try
+        {
+            await SaveUserConfigFileAsync();
+        }
+        finally
+        {
+            _saveLock.Release();
+        }
+    }
+
+    private Task SaveUserConfigFileAsync()
+    {
+        return _userConfigService.SaveAsync(_paths.UserConfigPath, _userConfig);
+    }
+
+    private void ScheduleSave()
+    {
+        if (_isBindingProject || _isLoadingConfig)
+        {
+            return;
+        }
+
+        _saveCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _saveCts = cts;
+        _ = SaveAfterDelayAsync(cts);
+    }
+
+    private async Task SaveAfterDelayAsync(CancellationTokenSource cts)
+    {
+        try
+        {
+            await Task.Delay(350, cts.Token);
+            await SaveAllAsync();
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Guardado automatico falló: {ex.Message}");
+        }
+        finally
+        {
+            if (ReferenceEquals(_saveCts, cts))
+            {
+                _saveCts = null;
+            }
+
+            cts.Dispose();
+        }
     }
 
     private void CaptureSteamworksSettings()
@@ -468,6 +589,7 @@ public partial class MainWindow : Window
         _userConfig.Steamworks ??= new SteamworksConfig();
         _userConfig.Steamworks.PartnerApiBaseUrl = SteamworksApiBaseUrlTextBox.Text.Trim();
         _userConfig.Steamworks.PublisherApiKey = SteamworksApiKeyPasswordBox.Password;
+        _userConfig.Steamworks.Enabled = !string.IsNullOrWhiteSpace(_userConfig.Steamworks.PublisherApiKey);
     }
 
     private void RefreshVdfPreview()
@@ -495,12 +617,27 @@ public partial class MainWindow : Window
             return;
         }
 
-        var files = _vdfGenerator.Generate(project);
-        RefreshVdfPreview();
-        AppendLog("VDF generado:");
-        foreach (var file in files)
+        var errors = _vdfGenerator.Validate(project);
+        if (errors.Count > 0)
         {
-            AppendLog($"  {file}");
+            PreflightText.Text = string.Join(Environment.NewLine, errors);
+            AppendLog("VDF no generado: corrige la validacion local primero.");
+            return;
+        }
+
+        try
+        {
+            var files = _vdfGenerator.Generate(project);
+            RefreshVdfPreview();
+            AppendLog("VDF generado:");
+            foreach (var file in files)
+            {
+                AppendLog($"  {file}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"No se pudo generar el VDF: {ex.Message}");
         }
     }
 
@@ -546,20 +683,27 @@ public partial class MainWindow : Window
             return;
         }
 
-        var folders = _outputFolders.EnsureSelectedPlatformFolders(project);
-        if (folders.Count == 0)
+        try
         {
-            AppendLog("No hay plataformas seleccionadas.");
-            return;
-        }
+            var folders = _outputFolders.EnsureSelectedPlatformFolders(project);
+            if (folders.Count == 0)
+            {
+                AppendLog("No hay plataformas seleccionadas.");
+                return;
+            }
 
-        AppendLog("Carpetas listas:");
-        foreach (var folder in folders)
+            AppendLog("Carpetas listas:");
+            foreach (var folder in folders)
+            {
+                AppendLog($"  {folder}");
+            }
+
+            UpdatePreflight(project);
+        }
+        catch (Exception ex)
         {
-            AppendLog($"  {folder}");
+            AppendLog($"No se pudieron crear las carpetas: {ex.Message}");
         }
-
-        UpdatePreflight(project);
     }
 
     private async void CheckSteamCmdButton_Click(object sender, RoutedEventArgs e)
@@ -573,7 +717,7 @@ public partial class MainWindow : Window
             "SteamCMD check",
             async () =>
             {
-                var exitCode = await _steamCmdRunner.CheckInstallationAsync(_userConfig, AppendLog);
+                var exitCode = await _steamCmdRunner.CheckInstallationAsync(_userConfig, AppendSteamCmdOutput);
                 UpdateSteamCmdStatus(exitCode == 0);
                 return exitCode;
             });
@@ -602,11 +746,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        CaptureSteamworksSettings();
-        await SaveUserConfigAsync();
-
         try
         {
+            CaptureSteamworksSettings();
+            await SaveUserConfigAsync();
             _operationInProgress = true;
             UploadBuildButton.IsEnabled = false;
             CheckSteamworksButton.IsEnabled = false;
@@ -650,7 +793,7 @@ public partial class MainWindow : Window
 
         await RunOperationAsync(
             "SteamCMD login",
-            () => _steamCmdRunner.LoginAsync(_userConfig, AppendLog, credentials: GetSteamCmdCredentials()));
+            () => _steamCmdRunner.LoginAsync(_userConfig, AppendSteamCmdOutput, credentials: GetSteamCmdCredentials()));
     }
 
     private async void UploadBuildButton_Click(object sender, RoutedEventArgs e)
@@ -660,39 +803,47 @@ public partial class MainWindow : Window
             return;
         }
 
-        _outputFolders.EnsureSelectedPlatformFolders(project);
-        var validationOk = ValidateSelectedBuild(showSuccess: false);
-        if (!validationOk)
+        try
         {
-            AppendLog("Upload cancelado: corrige la validacion local primero.");
-            return;
+            _outputFolders.EnsureSelectedPlatformFolders(project);
+            var validationOk = ValidateSelectedBuild(showSuccess: false);
+            if (!validationOk)
+            {
+                AppendLog("Upload cancelado: corrige la validacion local primero.");
+                return;
+            }
+
+            var files = _vdfGenerator.Generate(project);
+            var appBuildPath = _vdfGenerator.GetAppBuildPath(project);
+            var confirmation = BuildUploadConfirmation(project, appBuildPath);
+            var result = MessageBox.Show(
+                confirmation,
+                "Confirmar Upload Build",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                AppendLog("Upload cancelado por el usuario.");
+                return;
+            }
+
+            AppendLog("VDF listo para upload:");
+            foreach (var file in files)
+            {
+                AppendLog($"  {file}");
+            }
+
+            await RunOperationAsync(
+                "Upload Build",
+                () => _steamCmdRunner.UploadBuildAsync(_userConfig, appBuildPath, AppendSteamCmdOutput, credentials: GetSteamCmdCredentials()));
         }
-
-        var files = _vdfGenerator.Generate(project);
-        var appBuildPath = _vdfGenerator.GetAppBuildPath(project);
-        var confirmation = BuildUploadConfirmation(project, appBuildPath);
-        var result = MessageBox.Show(
-            confirmation,
-            "Confirmar Upload Build",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No);
-
-        if (result != MessageBoxResult.Yes)
+        catch (Exception ex)
         {
-            AppendLog("Upload cancelado por el usuario.");
-            return;
+            AppendLog($"Upload cancelado: {ex.Message}");
+            FooterStatusText.Text = "Upload cancelado por un error local.";
         }
-
-        AppendLog("VDF listo para upload:");
-        foreach (var file in files)
-        {
-            AppendLog($"  {file}");
-        }
-
-        await RunOperationAsync(
-            "Upload Build",
-            () => _steamCmdRunner.UploadBuildAsync(_userConfig, appBuildPath, AppendLog, credentials: GetSteamCmdCredentials()));
     }
 
     private async Task RunOperationAsync(string label, Func<Task<int>> operation)
@@ -722,6 +873,7 @@ public partial class MainWindow : Window
             RefreshBranchesButton.IsEnabled = SelectedProject is not null;
             SteamCmdPasswordBox.Clear();
             SteamGuardCodePasswordBox.Clear();
+            SteamCmdManualInputBox.Clear();
         }
     }
 
@@ -750,19 +902,30 @@ public partial class MainWindow : Window
             : new SteamCmdCredentials(password, guardCode);
     }
 
-    private async void AutoScrollCheckBox_Changed(object sender, RoutedEventArgs e)
+    private void AutoScrollCheckBox_Changed(object sender, RoutedEventArgs e)
     {
         if (_isBindingProject || _isLoadingConfig)
         {
             return;
         }
 
-        await SaveUserConfigAsync();
+        _userConfig.AutoScrollLogs = AutoScrollCheckBox.IsChecked == true;
+        ScheduleSave();
     }
 
     private void ClearLogsButton_Click(object sender, RoutedEventArgs e)
     {
         LogsTextBox.Clear();
+        _steamCmdConsoleAtLineStart = true;
+    }
+
+    private void SendSteamCmdInputButton_Click(object sender, RoutedEventArgs e)
+    {
+        var input = SteamCmdManualInputBox.Password;
+        if (_steamCmdRunner.TrySendInput(input, AppendSteamCmdOutput))
+        {
+            SteamCmdManualInputBox.Clear();
+        }
     }
 
     private void UpdatePreflight(SteamProject project)
@@ -816,6 +979,45 @@ public partial class MainWindow : Window
         Dispatcher.Invoke(() =>
         {
             LogsTextBox.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}");
+            if (AutoScrollCheckBox.IsChecked == true)
+            {
+                LogsTextBox.ScrollToEnd();
+            }
+        });
+    }
+
+    private void AppendSteamCmdOutput(string chunk)
+    {
+        if (string.IsNullOrEmpty(chunk))
+        {
+            return;
+        }
+
+        Dispatcher.Invoke(() =>
+        {
+            var normalized = chunk.Replace("\r\n", "\n").Replace('\r', '\n');
+            var rendered = new StringBuilder(normalized.Length + 32);
+
+            foreach (var character in normalized)
+            {
+                if (_steamCmdConsoleAtLineStart)
+                {
+                    rendered.Append('[').Append(DateTime.Now.ToString("HH:mm:ss")).Append("] ");
+                    _steamCmdConsoleAtLineStart = false;
+                }
+
+                if (character == '\n')
+                {
+                    rendered.Append(Environment.NewLine);
+                    _steamCmdConsoleAtLineStart = true;
+                }
+                else
+                {
+                    rendered.Append(character);
+                }
+            }
+
+            LogsTextBox.AppendText(rendered.ToString());
             if (AutoScrollCheckBox.IsChecked == true)
             {
                 LogsTextBox.ScrollToEnd();

@@ -318,6 +318,11 @@
                                             <Button Content="Clear" Margin="18,0,0,0" Click="ClearLogsButton_Click" />
                                             <CheckBox x:Name="AutoScrollCheckBox" Content="Auto-scroll" Margin="18,0,0,0" Checked="AutoScrollCheckBox_Changed" Unchecked="AutoScrollCheckBox_Changed" />
                                         </StackPanel>
+                                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+                                            <PasswordBox x:Name="SteamCmdManualInputBox" Width="260" ToolTip="Password o código solicitado por SteamCMD. Se borra después de enviarlo." />
+                                            <Button Content="Enviar entrada" Margin="8,0,0,0" Click="SendSteamCmdInputButton_Click" />
+                                            <TextBlock Text="Usa esto si SteamCMD solicita una credencial." Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                                        </StackPanel>
                                         <TextBox x:Name="LogsTextBox" Height="180" Background="#071019" BorderBrush="#26384A" Foreground="#CFE3F7" FontFamily="Consolas" FontSize="13" IsReadOnly="True" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" />
                                     </DockPanel>
                                 </Border>
@@ -359,7 +364,7 @@
                                     <TextBox x:Name="SteamworksApiBaseUrlTextBox" Grid.Row="4" Grid.Column="1" Margin="0,10,0,0" TextChanged="SettingsField_TextChanged" />
 
                                     <TextBlock Text="Publisher API key" Grid.Row="5" Foreground="{StaticResource TextMuted}" Margin="0,18,18,0" />
-                                    <PasswordBox x:Name="SteamworksApiKeyPasswordBox" Grid.Row="5" Grid.Column="1" Margin="0,10,0,0" PasswordChanged="SteamworksApiKeyPasswordBox_PasswordChanged" ToolTip="Se guarda solo en config/user.json, ignorado por Git." />
+                                    <PasswordBox x:Name="SteamworksApiKeyPasswordBox" Grid.Row="5" Grid.Column="1" Margin="0,10,0,0" PasswordChanged="SteamworksApiKeyPasswordBox_PasswordChanged" ToolTip="Se guarda solo en config/user.json, ignorado por Git. Una key activa la integración." />
 
                                     <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Margin="0,12,0,0">
                                         <Button x:Name="CheckSteamworksButton" Content="Comprobar Steamworks API" Click="CheckSteamworksButton_Click" />
