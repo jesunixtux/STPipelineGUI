@@ -36,6 +36,43 @@
           "InstallScript": ""
         }
       ]
+    },
+    {
+      "AppId": "4053230",
+      "Name": "JumpFall",
+      "Branch": "default",
+      "Description": "Upload-version",
+      "ContentRoot": "output/4053230",
+      "BuildOutput": "steampipe/cache/4053230",
+      "VdfOutput": "vdf/generated",
+      "Platforms": {
+        "Windows": true,
+        "Linux": true,
+        "Macos": true
+      },
+      "Depots": [
+        {
+          "DepotId": "4053231",
+          "Name": "Windows",
+          "Platform": "windows",
+          "ContentRoot": "output/4053230/windows",
+          "InstallScript": ""
+        },
+        {
+          "DepotId": "4053232",
+          "Name": "Linux",
+          "Platform": "linux",
+          "ContentRoot": "output/4053230/linux",
+          "InstallScript": ""
+        },
+        {
+          "DepotId": "4053233",
+          "Name": "macOS",
+          "Platform": "macos",
+          "ContentRoot": "output/4053230/macos",
+          "InstallScript": ""
+        }
+      ]
     }
   ]
 }
